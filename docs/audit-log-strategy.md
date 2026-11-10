@@ -21,6 +21,7 @@ Only interactive, user-initiated actions originating from the Campaign API Lambd
 * `DELETE /campaigns/{id}` $\rightarrow$ Action: `delete`
 * `POST /campaigns/{id}/schedule` $\rightarrow$ Action: `schedule`
 * `POST /campaigns/{id}/cancel` $\rightarrow$ Action: `cancel`
+* `POST /campaigns/{id}/send` $\rightarrow$ Action: `send` (immediate dispatch; kept separate from `schedule` so the audit trail distinguishes "sent now" from "scheduled for later")
 * Template mutations (`create`, `update`, `delete`)
 * Customer suppression preference changes (`opt_out`, `opt_in`)
 
