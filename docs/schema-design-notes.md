@@ -29,9 +29,10 @@
 ### US02 — Schedule Campaign
 | Table / Column | What it does |
 |---|---|
-| `campaigns.scheduled_at` | Selected send time (indexed so the Dispatcher can find due campaigns fast). Two options, both supported by the same column: **schedule at** = set a timestamp, waits for EventBridge; **immediate** = send now, `scheduled_at` stays NULL |
-| `campaigns.status` | Displayed status: `draft` → `scheduled` → `sending` → `completed`. Immediate sends skip `scheduled` and go `draft` → `sending` |
-| `audit_logs.action = 'schedule' / 'cancel'` | History of who scheduled or cancelled |
+| `campaigns.scheduled_at` | Selected send time (indexed so the Dispatcher can find due campaigns fast). Two options: **schedule at** = future timestamp; **immediate** = `scheduled_at` set to `NOW()` |
+| `campaigns.dispatch_mode` | `scheduled` (default) or `immediate` — how the campaign was dispatched |
+| `campaigns.status` | Displayed status: `draft` → `scheduled` → `sending` → `completed`. Immediate sends skip `scheduled` and go `draft` → `sending` directly |
+| `audit_logs.action = 'schedule' / 'cancel' / 'send'` | `schedule`/`cancel` = who scheduled or cancelled; `send` = immediate dispatch (logged as its own action, not reused `schedule`) |
 
 ### US03 — Send Campaign
 | Table / Column | What it does |
@@ -66,13 +67,15 @@
 
 ---
 
-## 2. 3 changes vs. the previous schema version (review these)
+## 2. Changes vs. the previous schema version (review these)
 
 | # | Change | Why |
 |---|---|---|
 | 1 | `audit_logs.action`: added `'opt_in'`, `'opt_out'` | `audit-log-strategy.md` requires logging customer email preference changes; the old enum could not record these two actions |
 | 2 | Removed `email_logs.delivery_status` | Redundant: `send_status` already covers it. Two status columns in one table let the data drift apart |
 | 3 | Removed `idx_customers_email` | The `UNIQUE` constraint on `email` already creates an index; an extra one only costs write performance |
+| 4 | `campaigns`: added `dispatch_mode` (`'scheduled'` default / `'immediate'`) | Immediate sends must be distinguishable from scheduled ones. `scheduled_at` is set to `NOW()` for immediate (every campaign keeps a timestamp), but the flow is `draft → sending` directly — it skips `scheduled` so no meaningless instant EventBridge event is created. Enforced by `chk_campaigns_dispatch_mode` (an immediate campaign can never sit in `scheduled`) |
+| 5 | `audit_logs.action`: added `'send'` | Immediate dispatch is a different intent from future scheduling. Reusing `'schedule'` for both would blur the audit trail when querying "who sent this now" vs "who scheduled it"; a dedicated `'send'` keeps each action auditable on its own |
 
 Everything else — tables, columns, indexes, constraints — is **unchanged**. Change #1 only adds enum values, #2 and #3 only remove dead weight, so code reading the old names is unaffected.
 
@@ -90,6 +93,7 @@ Everything else — tables, columns, indexes, constraints — is **unchanged**. 
 | `PUT /campaigns/{id}` | campaigns | campaigns | `update` |
 | `DELETE /campaigns/{id}` | — | campaigns | `delete` |
 | `POST /campaigns/{id}/schedule` | — | campaigns | `schedule` |
+| `POST /campaigns/{id}/send` | templates, segments | campaigns (status = `sending` directly, `scheduled_at = NOW()`, `dispatch_mode = 'immediate'`), audit `send`. No SQS/EventBridge wait — the Dispatcher runs immediately |
 | `POST /campaigns/{id}/cancel` | — | campaigns | `cancel` |
 | `GET /campaigns/{id}/logs` | email_logs | — | — |
 | CRUD `/templates` | templates | templates | `create` / `update` / `delete` |
@@ -103,7 +107,7 @@ Everything else — tables, columns, indexes, constraints — is **unchanged**. 
 
 | Lambda | Table | What it does |
 |---|---|---|
-| **Dispatcher** (send time reached) | campaigns | Moves `scheduled` → `sending` → `completed` |
+| **Dispatcher** (two triggers: EventBridge for `scheduled`, direct invoke for `immediate`) | campaigns, email_logs | Moves `scheduled` → `sending` (scheduled mode) or `draft` → `sending` (immediate mode); then `sending` → `completed` / `failed` |
 | **Dispatcher** (per customer) | email_logs | Creates an `pending` row with an idempotency key, then `queued` |
 | **Worker** (sends via SES) | email_logs | `queued` → `sent`, records `ses_message_id`; 3 failed retries → `failed` |
 | **Event Handler** (SES webhook) | email_events | Inserts events, deduplicated by `deduplication_key` |

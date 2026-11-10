@@ -53,7 +53,8 @@ CREATE TABLE templates (
 );
 
 -- Campaign states: draft -> scheduled -> sending -> completed/failed, scheduled -> cancelled.
--- Immediate sends skip 'scheduled' and go draft -> sending (scheduled_at stays NULL).
+-- Immediate send: scheduled_at = NOW() but flows draft -> sending directly, skipping
+-- 'scheduled' (no EventBridge rule, no scheduler event). dispatch_mode records the path.
 -- Transitions are enforced with conditional updates in the app.
 CREATE TABLE campaigns (
     campaign_id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -63,12 +64,18 @@ CREATE TABLE campaigns (
     status       VARCHAR(50) NOT NULL DEFAULT 'draft' CHECK (
         status IN ('draft', 'scheduled', 'sending', 'completed', 'failed', 'cancelled')
     ),
-    scheduled_at TIMESTAMPTZ,             -- NULL = immediate send (skips EventBridge)
+    dispatch_mode VARCHAR(50) NOT NULL DEFAULT 'scheduled' CHECK (
+        dispatch_mode IN ('scheduled', 'immediate')      -- set at POST /send or /schedule
+    ),
+    scheduled_at TIMESTAMPTZ,             -- NOW() when dispatch_mode = 'immediate'
 
-    -- Invariant: a campaign waiting for EventBridge must have a send time;
-    -- immediate sends keep scheduled_at = NULL for their whole lifecycle.
+    -- Invariants:
+    -- 1. a campaign waiting for EventBridge must have a send time
+    -- 2. an immediate campaign never sits in 'scheduled' (nothing to wait for)
     CONSTRAINT chk_campaigns_scheduled_at
         CHECK (status <> 'scheduled' OR scheduled_at IS NOT NULL),
+    CONSTRAINT chk_campaigns_dispatch_mode
+        CHECK (dispatch_mode = 'scheduled' OR status <> 'scheduled'),
     created_by   VARCHAR(100) NOT NULL,             -- Cognito sub claim
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -132,7 +139,8 @@ CREATE TABLE audit_logs (
     audit_log_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      VARCHAR(100) NOT NULL,             -- Cognito sub claim
     action       VARCHAR(50) NOT NULL CHECK (
-        action IN ('create', 'update', 'delete', 'schedule', 'cancel', 'opt_in', 'opt_out')
+        action IN ('create', 'update', 'delete', 'schedule', 'send', 'cancel',
+                   'opt_in', 'opt_out')              -- 'send' = immediate dispatch
     ),
     entity_type  VARCHAR(50) NOT NULL CHECK (
         entity_type IN ('campaign', 'template', 'segment', 'customer_preference')

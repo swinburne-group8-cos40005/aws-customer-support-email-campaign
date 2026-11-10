@@ -53,7 +53,8 @@ erDiagram
         UUID template_id FK "ON DELETE RESTRICT"
         UUID segment_id FK "ON DELETE RESTRICT"
         VARCHAR status "draft|scheduled|sending|completed|failed|cancelled"
-        timestamptz scheduled_at "NULL = immediate send"
+        VARCHAR dispatch_mode "scheduled|immediate (default scheduled)"
+        timestamptz scheduled_at "NOW() for immediate; immediate never sits in 'scheduled'"
         VARCHAR created_by "Cognito sub"
         timestamptz created_at
         timestamptz updated_at
