@@ -69,13 +69,25 @@ CREATE TABLE campaigns (
     ),
     scheduled_at TIMESTAMPTZ,             -- NOW() when dispatch_mode = 'immediate'
 
-    -- Invariants:
+    -- Invariants (CASE reads like plain English: "when X then Y"):
     -- 1. a campaign waiting for EventBridge must have a send time
     -- 2. an immediate campaign never sits in 'scheduled' (nothing to wait for)
     CONSTRAINT chk_campaigns_scheduled_at
-        CHECK (status <> 'scheduled' OR scheduled_at IS NOT NULL),
+        CHECK (
+            CASE
+                WHEN status = 'scheduled'
+                THEN scheduled_at IS NOT NULL
+                ELSE TRUE
+            END),
+
     CONSTRAINT chk_campaigns_dispatch_mode
-        CHECK (dispatch_mode = 'scheduled' OR status <> 'scheduled'),
+        CHECK (
+            CASE
+                WHEN dispatch_mode = 'immediate'
+                THEN status <> 'scheduled'
+                ELSE TRUE
+            END),
+
     created_by   VARCHAR(100) NOT NULL,             -- Cognito sub claim
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
