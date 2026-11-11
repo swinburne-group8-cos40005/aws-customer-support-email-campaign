@@ -105,6 +105,12 @@ All error responses (HTTP 4xx and 5xx) must follow this consistent envelope:
 ```
 * **Response `200 OK`:** Returns campaign with `status: "scheduled"`. Emits `schedule` audit log.
 
+#### `POST /campaigns/{id}/send`
+* **Purpose:** Immediate dispatch of a draft campaign (US03). Does **not** create an EventBridge rule — the Dispatcher Lambda is invoked directly by the Campaign API Lambda.
+* **Behavior:** Sets `status: "sending"` and `dispatchMode: "immediate"` immediately; `scheduledAt` is stored as the current time so every campaign keeps a dispatch timestamp. No wait in `scheduled`.
+* **Response `200 OK`:** Returns campaign with `status: "sending"`, `dispatchMode: "immediate"`, `scheduledAt: <now>`. Emits `send` audit log (a dedicated action — immediate dispatch must stay distinguishable from scheduled campaigns in the audit trail).
+* *Amended: dispatch-mode decision, issue #4. Immediate and scheduled shares the SQS Worker path from `sending` onwards.*
+
 #### `POST /campaigns/{id}/cancel`
 * **Purpose:** Cancel a scheduled campaign before execution (US02).
 * **Response `200 OK`:** Returns campaign with `status: "cancelled"`. Emits `cancel` audit log.

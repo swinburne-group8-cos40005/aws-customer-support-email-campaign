@@ -22,6 +22,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `[Initial]` | `draft` | Create Campaign | Campaign API Lambda | Payload contains valid name, templateId, and segmentId. |
 | `draft` | `scheduled` | `POST /campaigns/{id}/schedule` | Campaign API Lambda | `scheduledAt` must be at least 5 minutes in the future. |
+| `draft` | `sending` | `POST /campaigns/{id}/send` | Campaign API Lambda → Dispatcher Lambda (direct invoke) | Immediate dispatch: `dispatchMode = 'immediate'`, `scheduledAt` stored as `NOW()`. No EventBridge rule is created and the `scheduled` state is skipped. *(Amended: dispatch-mode decision, issue #4)* |
 | `scheduled` | `draft` / `cancelled` | `POST /campaigns/{id}/cancel` | Campaign API Lambda | Allowed only before the scheduled execution timestamp. |
 | `scheduled` | `sending` | EventBridge Scheduler Trigger | Dispatcher Lambda | Triggered at `scheduledAt`. Locks row via `UPDATE ... WHERE status = 'scheduled'`. |
 | `sending` | `completed` | Dispatch Finished | Dispatcher Lambda | All segment recipients iterated and enqueued into Amazon SQS. |
@@ -31,6 +32,7 @@
 stateDiagram-v2
     [*] --> draft : Create Campaign
     draft --> scheduled : POST /schedule
+    draft --> sending : POST /send (immediate)
     scheduled --> draft : Cancel (revert to draft)
     scheduled --> cancelled : POST /cancel
     scheduled --> sending : EventBridge Trigger
