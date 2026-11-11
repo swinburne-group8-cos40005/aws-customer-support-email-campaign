@@ -1,0 +1,24 @@
+{
+  "name": "campaign-api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Campaign API Lambda handlers (Issue #5). Node 20.x runtime, bundled with esbuild at deploy time.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.1",
+    "@types/pg": "^8.11.10",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.2"
+  }
+}
