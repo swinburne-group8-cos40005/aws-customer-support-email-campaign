@@ -48,7 +48,7 @@ Provision all shared and demo-critical infrastructure with **AWS CloudFormation 
 - Every template change goes through a PR (reviewable diff like any other code).
 - Deployment is done with `aws cloudformation deploy --stack-name <stack> --template-file infra/<concern>.yaml --capabilities CAPABILITY_IAM` — documented in README as each template lands.
 - Stack updates follow the template; **drift detected at any time means the template is wrong** — fix the template, never "fix" the console to match reality.
-- The DB access-path decision (RDS Proxy + `pg` driver vs Aurora Data API — raised as follow-up to #20) must be settled before `infra/data.yaml` is written, because `backend/src/shared/db.ts` currently assumes the `pg` driver shape.
+- The DB access-path decision (RDS Proxy + `pg` wire protocol vs Aurora Data API — tracked in issue #21) must be settled **before** `infra/data.yaml` is written; it determines the driver and transaction shape the shared DB access layer will use across all Lambdas.
 - An owner is assigned for the first template (`auth.yaml`, unblocks #9); subsequent templates follow the same one-owner-per-stack pattern.
 
 ## References
