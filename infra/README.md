@@ -6,7 +6,7 @@ Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<conc
 
 | Template | Stack | Contents | Status |
 | :--- | :--- | :--- | :--- |
-| `auth.yaml` | `csep-auth` | Cognito user pool + app client | not written yet (owner: backend lead) |
+| `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | **this PR (draft for review)** |
 | `data.yaml` | `csep-data` | Aurora Serverless v2 cluster, RDS Proxy, Secrets Manager master credential | **this PR (draft for review)** |
 | `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, `rds-db:connect` roles | **this PR (draft for review)** |
 | `messaging.yaml` | `csep-messaging` | SQS + DLQ, SNS, SES event destinations, EventBridge Scheduler | pending (issues #6, #7, #10) |
@@ -15,8 +15,25 @@ Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<conc
 ## Deploy order
 
 ```
-csep-data  →  csep-api        (csep-api imports csep-data exports)
+csep-auth  →  csep-data  →  csep-api        (csep-api imports csep-data exports;
+                                             csep-api is parameterized with the
+                                             csep-auth user pool ID + client ID)
 ```
+
+### 0. csep-auth
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-auth \
+  --template-file infra/auth.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    CallbackUrls=http://localhost:5173 \
+    LogoutUrls=http://localhost:5173
+```
+
+The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique — no collision with other Cognito domains. The `UserPoolId` and `UserPoolClientId` outputs are passed to `csep-api` at deploy time (step 2), and the hosted-UI domain goes to the frontend (#9) for login/logout redirects.
 
 `csep-auth` has no dependency on `csep-data`, but `csep-api` needs its user pool ID and app client ID, so practical order: **auth → data → api**.
 
