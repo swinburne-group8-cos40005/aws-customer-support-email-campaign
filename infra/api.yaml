@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-api stack (ADR-0004). HTTP API with a Cognito JWT authorizer and
+  the campaign API Lambda functions. Lambdas connect to Aurora through
+  the RDS Proxy exported by csep-data using IAM token auth (ADR-0005,
+  issue #22): the role carries rds-db:connect on the Proxy and no DB
+  password is ever stored in Lambda configuration.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  UserPoolId:
+    Type: String
+    Description: Cognito user pool ID from the csep-auth stack
+  UserPoolClientId:
+    Type: String
+    Description: Cognito app client ID from the csep-auth stack (JWT audience)
+  ArtifactBucket:
+    Type: String
+    Description: S3 bucket holding the packaged backend Lambda bundle
+  ArtifactKey:
+    Type: String
+    Description: S3 key of the packaged backend Lambda bundle
+  Handler:
+    Type: String
+    Default: create-campaign.handler
+    Description: Exported handler of the first deployed function (POST /v1/campaigns)
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for the Lambda VPC attachment
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  DbName:
+    Type: String
+    Default: csep
+  DbUsername:
+    Type: String
+    Default: csepadmin
+  DbPort:
+    Type: Number
+    Default: 5432
+
+Resources:
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub csep-api-${EnvironmentName}
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ["*"] # tighten to the frontend origin before public exposure
+        AllowMethods: [GET, POST, PUT, DELETE]
+        AllowHeaders: [Authorization, Content-Type]
+        MaxAge: 86400
+
+  JwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      Name: cognito-jwt-authorizer
+      AuthorizerType: JWT
+      IdentitySource:
+        - $request.header.Authorization
+      JwtConfiguration:
+        audience:
+          - !Ref UserPoolClientId
+        issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub csep-lambda-egress-${EnvironmentName}
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  ApiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-api-lambda-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: CsepDbConnect
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: rds-db:connect
+                # D1 (issue #22): this is the ONLY database credential
+                # permission a Lambda needs — no secretsmanager access.
+                Resource:
+                  - Fn::ImportValue: csep-data-DBProxyArn
+
+  CreateCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-create-campaign-${EnvironmentName}
+      Runtime: nodejs20.x
+      Handler: !Ref Handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          # Connection coordinates only — no password anywhere (D1).
+          # The connect layer signs an IAM token per connection and
+          # requires TLS (issue #22, ADR-0005).
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME: !Ref DbName
+          DB_USER: !Ref DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  CreateCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt CreateCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  CreateCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/campaigns"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${CreateCampaignIntegration}"
+
+  CreateCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/campaigns"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: "$default"
+      AutoDeploy: true
+
+Outputs:
+  ApiEndpoint:
+    Description: Invoke URL for the default stage
+    Value: !GetAtt HttpApi.Endpoint
+    Export:
+      Name: csep-api-ApiEndpoint
+  CreateCampaignFunctionArn:
+    Value: !GetAtt CreateCampaignFunction.Arn
+    Export:
+      Name: csep-api-CreateCampaignFunctionArn

@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-data stack (ADR-0004). Provisions the Aurora Serverless v2
+  PostgreSQL cluster and the RDS Proxy that sits in front of it
+  (ADR-0005). Client access to the Proxy is IAM-token based
+  (issue #22 consensus: D1 = IAM auth at the Proxy); the Proxy
+  authenticates to Aurora with the Secrets Manager-managed master
+  credential (D2). No DB password ever reaches a Lambda.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC hosting the database
+  VpcCidrBlock:
+    Type: String
+    Description: CIDR of VpcId; used to allow in-VPC clients to reach the Proxy
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: At least two private subnets in different Availability Zones
+  DbName:
+    Type: String
+    Default: csep
+  DbUsername:
+    Type: String
+    Default: csepadmin
+    Description: Master (and only) DB user. Password is managed by Secrets Manager.
+  MinACU:
+    Type: Number
+    Default: 2
+    MinValue: 0.5
+    MaxValue: 128
+  MaxACU:
+    Type: Number
+    Default: 8
+    MinValue: 1
+    MaxValue: 128
+  DeletionProtection:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Set true for shared/demo stacks. Must be false for stack teardown (ADR-0004 cost control).
+
+Resources:
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for the csep Aurora cluster and RDS Proxy
+      SubnetIds: !Ref SubnetIds
+
+  # Postgres (5432) reachable from anywhere inside the VPC — Lambdas,
+  # bastion for schema bootstrap, local tooling over VPN. Restricting
+  # to the API Lambdas' SG is a hardening follow-up once csep-api exists.
+  ProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub csep-proxy-ingress-${EnvironmentName}
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !Ref VpcCidrBlock
+
+  # The cluster only accepts connections from the Proxy.
+  ClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub csep-aurora-ingress-${EnvironmentName}
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !GetAtt ProxySecurityGroup.GroupId
+
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: "15.4"
+      EngineMode: provisioned # Serverless v2 is provisioned mode + scaling config
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref MinACU
+        MaxCapacity: !Ref MaxACU
+      DatabaseName: !Ref DbName
+      MasterUsername: !Ref DbUsername
+      # D2 (issue #22): the master password is generated, stored and
+      # rotatable by Secrets Manager — never printed or echoed.
+      ManageMasterUserPassword: true
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt ClusterSecurityGroup.GroupId
+      StorageEncrypted: true
+      DeletionProtection: !Ref DeletionProtection
+      BackupRetentionPeriod: 7
+
+  # Lets the Proxy read the master credential from Secrets Manager.
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-proxy-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CsepProxySecretAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !GetAtt AuroraCluster.MasterUserSecret
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                # Needed when the secret uses the default KMS key.
+                # Tighten to the specific key ARN once known.
+
+  CampaignDBProxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub csep-proxy-${EnvironmentName}
+      EngineFamily: POSTGRESQL
+      # D1 (issue #22): clients authenticate with IAM tokens only —
+      # no static password is accepted at the Proxy.
+      Auth:
+        - AuthScheme: IAM
+          IAMAuth: REQUIRED
+      RequireTLS: true
+      RoleArn: !GetAtt ProxyRole.Arn
+      SecretArnList:
+        - !GetAtt AuroraCluster.MasterUserSecret
+      VpcSecurityGroupIds:
+        - !GetAtt ProxySecurityGroup.GroupId
+      VpcSubnetIds: !Ref SubnetIds
+      IdleClientTimeout: 600
+
+  ProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref CampaignDBProxy
+      TargetGroupName: default
+      DBClusterReferences:
+        - DBClusterIdentifier: !Ref AuroraCluster
+      ConnectionPoolConfig:
+        MaxConnectionsPercent: 80
+        ConnectionBorrowTimeout: 120
+
+Outputs:
+  DBProxyEndpoint:
+    Description: Hostname Lambdas connect to (with IAM auth + TLS)
+    Value: !GetAtt CampaignDBProxy.Endpoint
+    Export:
+      Name: csep-data-DBProxyEndpoint
+  DBProxyArn:
+    Description: Full ARN — target of each Lambda's rds-db:connect grant
+    Value: !GetAtt CampaignDBProxy.DBProxyArn
+    Export:
+      Name: csep-data-DBProxyArn
+  ClusterWriterEndpoint:
+    Description: Writer endpoint (Proxy target; NOT for application use)
+    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Export:
+      Name: csep-data-ClusterWriterEndpoint
+  DBSecretArn:
+    Description: Secrets Manager entry holding the master credential
+    Value: !GetAtt AuroraCluster.MasterUserSecret
+    Export:
+      Name: csep-data-DBSecretArn
+  DbName:
+    Value: !Ref DbName
+    Export:
+      Name: csep-data-DbName
+  DbUsername:
+    Value: !Ref DbUsername
+    Export:
+      Name: csep-data-DbUsername
