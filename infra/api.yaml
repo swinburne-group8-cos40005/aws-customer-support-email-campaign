@@ -11,12 +11,6 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-  UserPoolId:
-    Type: String
-    Description: Cognito user pool ID from the csep-auth stack
-  UserPoolClientId:
-    Type: String
-    Description: Cognito app client ID from the csep-auth stack (JWT audience)
   ArtifactBucket:
     Type: String
     Description: S3 bucket holding the packaged backend Lambda bundle
@@ -64,8 +58,9 @@ Resources:
         - $request.header.Authorization
       JwtConfiguration:
         audience:
-          - !Ref UserPoolClientId
-        issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+          - Fn::ImportValue: csep-auth-UserPoolClientId
+        issuer:
+          Fn::ImportValue: csep-auth-CognitoIssuer
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup

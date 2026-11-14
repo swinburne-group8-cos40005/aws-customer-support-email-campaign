@@ -15,9 +15,8 @@ Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<conc
 ## Deploy order
 
 ```
-csep-auth  →  csep-data  →  csep-api        (csep-api imports csep-data exports;
-                                             csep-api is parameterized with the
-                                             csep-auth user pool ID + client ID)
+csep-auth  →  csep-data  →  csep-api        (csep-api imports the csep-data DB exports
+                                             and the csep-auth user pool/issuer exports)
 ```
 
 ### 0. csep-auth
@@ -62,15 +61,13 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
-    UserPoolId=<from csep-auth> \
-    UserPoolClientId=<from csep-auth> \
     ArtifactBucket=<bucket> \
     ArtifactKey=<key> \
     SubnetIds=<subnet-a>,<subnet-b> \
     VpcId=<vpc-id>
 ```
 
-Cross-stack wiring is read-only on the consumer side: `csep-api` imports `csep-data-DBProxyEndpoint` and `csep-data-DBProxyArn` — the Lambda gets connection coordinates only, never a password (issue #22, D1).
+`csep-api` resolves everything cross-stack itself: `csep-auth-UserPoolClientId` and `csep-auth-CognitoIssuer` for the JWT authorizer, `csep-data-DBProxyEndpoint` and `csep-data-DBProxyArn` for the DB access path — the Lambda gets connection coordinates only, never a password (issue #22, D1).
 
 ## Design notes
 
