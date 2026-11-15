@@ -105,6 +105,7 @@ Outputs:
     Export:
       Name: csep-auth-CognitoIssuer
   HostedUiDomain:
-    Value: !GetAtt UserPoolDomain.CloudFrontDomain
+    Description: Cognito hosted login domain base URL for the frontend
+    Value: !Sub "https://csep-${AWS::AccountId}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
     Export:
       Name: csep-auth-HostedUiDomain

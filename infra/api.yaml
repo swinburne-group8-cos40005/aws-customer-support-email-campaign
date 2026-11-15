@@ -3,8 +3,8 @@ Description: >
   csep-api stack (ADR-0004). HTTP API with a Cognito JWT authorizer and
   the campaign API Lambda functions. Lambdas connect to Aurora through
   the RDS Proxy exported by csep-data using IAM token auth (ADR-0005,
-  issue #22): the role carries rds-db:connect on the Proxy and no DB
-  password is ever stored in Lambda configuration.
+  issue #22): the role carries rds-db:connect on the dedicated csep_app
+  Proxy database user; no DB password is stored in Lambda configuration.
 
 Parameters:
   EnvironmentName:
@@ -26,12 +26,6 @@ Parameters:
     Description: Private subnets for the Lambda VPC attachment
   VpcId:
     Type: AWS::EC2::VPC::Id
-  DbName:
-    Type: String
-    Default: csep
-  DbUsername:
-    Type: String
-    Default: csepadmin
   DbPort:
     Type: Number
     Default: 5432
@@ -57,9 +51,9 @@ Resources:
       IdentitySource:
         - $request.header.Authorization
       JwtConfiguration:
-        audience:
+        Audience:
           - Fn::ImportValue: csep-auth-UserPoolClientId
-        issuer:
+        Issuer:
           Fn::ImportValue: csep-auth-CognitoIssuer
 
   LambdaSecurityGroup:
@@ -92,10 +86,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: rds-db:connect
-                # D1 (issue #22): this is the ONLY database credential
-                # permission a Lambda needs — no secretsmanager access.
+                # Scope IAM auth to the Proxy's dedicated application
+                # database user; the Lambda cannot authenticate as master.
                 Resource:
-                  - Fn::ImportValue: csep-data-DBProxyArn
+                  - Fn::ImportValue: csep-data-DBProxyUserArn
 
   CreateCampaignFunction:
     Type: AWS::Lambda::Function
@@ -118,8 +112,10 @@ Resources:
           DB_HOST:
             Fn::ImportValue: csep-data-DBProxyEndpoint
           DB_PORT: !Ref DbPort
-          DB_NAME: !Ref DbName
-          DB_USER: !Ref DbUsername
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
       VpcConfig:
         SecurityGroupIds:
           - !GetAtt LambdaSecurityGroup.GroupId
@@ -167,7 +163,7 @@ Resources:
 Outputs:
   ApiEndpoint:
     Description: Invoke URL for the default stage
-    Value: !GetAtt HttpApi.Endpoint
+    Value: !GetAtt HttpApi.ApiEndpoint
     Export:
       Name: csep-api-ApiEndpoint
   CreateCampaignFunctionArn:

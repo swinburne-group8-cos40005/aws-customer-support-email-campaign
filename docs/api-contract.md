@@ -42,17 +42,17 @@ All error responses (HTTP 4xx and 5xx) must follow this consistent envelope:
 ### 1.4 Data Access Path
 API Lambdas never connect to Aurora directly. The access path is:
 ```
-Lambda ──IAM auth token (~15 min)──▶ RDS Proxy ──Secrets Manager credential──▶ Aurora PostgreSQL (Serverless v2)
+Lambda (`csep_app`) ──IAM auth token (~15 min)──▶ RDS Proxy ──app-user Secrets Manager credential──▶ Aurora PostgreSQL (Serverless v2)
 ```
 - Settled in ADR-0005 (RDS Proxy + `pg` driver over the Postgres wire protocol; the Aurora Data API is rejected) and issue #22 (IAM token auth in front of the Proxy, Secrets Manager behind it).
-- Lambdas hold **no database password**: each Lambda signs a short-lived IAM token with its execution role (`rds-db:connect` on the Proxy). The Proxy authenticates to Aurora with the credential stored in Secrets Manager.
+- Lambdas hold **no database password**: each Lambda signs a short-lived IAM token with its execution role (`rds-db:connect` scoped to the Proxy's `csep_app` database user). The Proxy authenticates to Aurora with the dedicated app user's credential stored in Secrets Manager; the Lambda cannot authenticate as the master user.
 - All writes run in a single transaction that also inserts the audit row (see `docs/audit-log-strategy.md`), so a failed mutation leaves no partial state.
 - Transient database unavailability surfaces as `503` with code `DB_UNAVAILABLE` in the standard error envelope; clients should retry with backoff rather than re-submit blindly.
 
 ### 1.5 Deployment & Infrastructure
 - Infrastructure is AWS CloudFormation (ADR-0004), templates in `infra/`. Deploy order for this contract: `csep-auth` → `csep-data` (Aurora + RDS Proxy) → `csep-api` (HTTP API + JWT authorizer + Lambdas).
 - Stacks cross-reference via `Fn::ImportValue` outputs; no manual console changes to shared stacks — drift means the template is wrong, not the console.
-- Schema is applied from `db/schema.sql` against the cluster; it is never created or edited by hand in the console.
+- Schema is applied from `db/schema.sql` through a one-off SSM-managed host with temporary direct cluster access; its security-group ingress is removed after bootstrap. Schema is never created or edited by hand in the console.
 
 ---
 

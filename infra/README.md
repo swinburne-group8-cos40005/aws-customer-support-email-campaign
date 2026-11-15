@@ -1,22 +1,21 @@
 # Infrastructure — CloudFormation Templates
 
-Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and the issue #22 credential consensus (D1: IAM token auth Lambda → Proxy; D2: Secrets Manager credential Proxy → Aurora; D3: plain `.env` for local dev).
+Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and issue #22: Lambda IAM authentication as the dedicated `csep_app` user, with that user's generated password held by Secrets Manager for the Proxy.
 
 ## Stack status
 
 | Template | Stack | Contents | Status |
 | :--- | :--- | :--- | :--- |
 | `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | **this PR (draft for review)** |
-| `data.yaml` | `csep-data` | Aurora Serverless v2 cluster, RDS Proxy, Secrets Manager master credential | **this PR (draft for review)** |
-| `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, `rds-db:connect` roles | **this PR (draft for review)** |
+| `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | **this PR (draft for review)** |
+| `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | **this PR (draft for review)** |
 | `messaging.yaml` | `csep-messaging` | SQS + DLQ, SNS, SES event destinations, EventBridge Scheduler | pending (issues #6, #7, #10) |
 | `observability.yaml` | `csep-observability` | CloudWatch alarms + dashboards | pending (issue #14) |
 
 ## Deploy order
 
 ```
-csep-auth  →  csep-data  →  csep-api        (csep-api imports the csep-data DB exports
-                                             and the csep-auth user pool/issuer exports)
+csep-auth  →  csep-data  →  schema bootstrap  →  csep-api
 ```
 
 ### 0. csep-auth
@@ -32,9 +31,7 @@ aws cloudformation deploy \
     LogoutUrls=http://localhost:5173
 ```
 
-The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique — no collision with other Cognito domains. The `UserPoolId` and `UserPoolClientId` outputs are passed to `csep-api` at deploy time (step 2), and the hosted-UI domain goes to the frontend (#9) for login/logout redirects.
-
-`csep-auth` has no dependency on `csep-data`, but `csep-api` needs its user pool ID and app client ID, so practical order: **auth → data → api**.
+The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique. The `UserPoolId`, `UserPoolClientId`, and full hosted-login domain URL are exported for the API and frontend.
 
 ### 1. csep-data
 
@@ -50,6 +47,71 @@ aws cloudformation deploy \
     SubnetIds=<subnet-a>,<subnet-b> \
     DeletionProtection=false
 ```
+
+`csep-data` creates the `csep_app` secret but not the database role itself. Bootstrap the schema and role before deploying `csep-api`:
+
+1. Create a disposable EC2 instance in a private subnet of the database VPC with SSM Agent and the `AmazonSSMManagedInstanceCore` instance profile. Attach a temporary security group with no inbound rules and the outbound access needed for SSM and PostgreSQL. Do not assign a public IP.
+2. Update `csep-data` with `BootstrapSecurityGroupId=<temporary-sg-id>` (and the same values for its other parameters). This temporarily allows that security group to connect directly to Aurora on port 5432:
+
+   ```sh
+   aws cloudformation deploy \
+     --stack-name csep-data \
+     --template-file infra/data.yaml \
+     --capabilities CAPABILITY_IAM \
+     --parameter-overrides \
+       EnvironmentName=dev VpcId=<vpc-id> VpcCidrBlock=<10.x.0.0/16> \
+       SubnetIds=<subnet-a>,<subnet-b> MasterDbUsername=csepadmin DbName=csep \
+       MinACU=2 MaxACU=8 DeletionProtection=false \
+       BootstrapSecurityGroupId=<temporary-sg-id>
+   ```
+3. Start an SSM remote-host port-forward from your workstation to the cluster writer endpoint:
+
+   ```sh
+   WRITER_ENDPOINT=$(aws cloudformation describe-stacks --stack-name csep-data \
+     --query "Stacks[0].Outputs[?OutputKey=='ClusterWriterEndpoint'].OutputValue | [0]" --output text)
+   aws ssm start-session \
+     --target <temporary-instance-id> \
+     --document-name AWS-StartPortForwardingSessionToRemoteHost \
+     --parameters "{\"host\":[\"$WRITER_ENDPOINT\"],\"portNumber\":[\"5432\"],\"localPortNumber\":[\"15432\"]}"
+   ```
+
+4. In a second local terminal with `psql`, `jq`, and AWS credentials authorized to read the two database secrets, retrieve the outputs from `csep-data`. Keep secret values in shell variables; do not enable shell tracing or print them.
+
+   ```sh
+   MASTER_SECRET_ARN=$(aws cloudformation describe-stacks --stack-name csep-data \
+     --query "Stacks[0].Outputs[?OutputKey=='DBSecretArn'].OutputValue | [0]" --output text)
+   APP_SECRET_ARN=$(aws cloudformation describe-stacks --stack-name csep-data \
+     --query "Stacks[0].Outputs[?OutputKey=='DBAppSecretArn'].OutputValue | [0]" --output text)
+   MASTER_JSON=$(aws secretsmanager get-secret-value \
+     --secret-id "$MASTER_SECRET_ARN" --query SecretString --output text)
+   DB_USER=$(printf '%s' "$MASTER_JSON" | jq -r '.username')
+   export PGPASSWORD=$(printf '%s' "$MASTER_JSON" | jq -r '.password')
+   export CSEP_APP_PASSWORD=$(aws secretsmanager get-secret-value \
+     --secret-id "$APP_SECRET_ARN" --query SecretString --output text | jq -r '.password')
+
+   psql "host=127.0.0.1 port=15432 dbname=csep user=$DB_USER sslmode=require" \
+     -v ON_ERROR_STOP=1 -f db/schema.sql
+   psql "host=127.0.0.1 port=15432 dbname=csep user=$DB_USER sslmode=require" \
+     -v ON_ERROR_STOP=1 -f infra/bootstrap-app-user.sql
+
+   unset MASTER_JSON DB_USER PGPASSWORD CSEP_APP_PASSWORD
+   ```
+
+   The master secret provides the bootstrap credentials, and the app secret provides the password assigned to `csep_app`. The app role receives CRUD on the campaign/data tables, but only SELECT and INSERT on `audit_logs`; future tables default to SELECT/INSERT and require explicit grants for additional privileges. `db/schema.sql` drops and recreates tables, so apply it only to a new database or after an approved backup.
+5. Update `csep-data` with the same parameter values and `BootstrapSecurityGroupId=` to remove the temporary cluster ingress:
+
+   ```sh
+   aws cloudformation deploy \
+     --stack-name csep-data \
+     --template-file infra/data.yaml \
+     --capabilities CAPABILITY_IAM \
+     --parameter-overrides \
+       EnvironmentName=dev VpcId=<vpc-id> VpcCidrBlock=<10.x.0.0/16> \
+       SubnetIds=<subnet-a>,<subnet-b> MasterDbUsername=csepadmin DbName=csep \
+       MinACU=2 MaxACU=8 DeletionProtection=false BootstrapSecurityGroupId=
+   ```
+
+   Stop the SSM session, terminate the EC2 instance, and delete its temporary security group. The Proxy is configured only with the `csep_app` secret; the master secret is not available to the Proxy or API Lambda.
 
 ### 2. csep-api
 
@@ -67,15 +129,11 @@ aws cloudformation deploy \
     VpcId=<vpc-id>
 ```
 
-`csep-api` resolves everything cross-stack itself: `csep-auth-UserPoolClientId` and `csep-auth-CognitoIssuer` for the JWT authorizer, `csep-data-DBProxyEndpoint` and `csep-data-DBProxyArn` for the DB access path — the Lambda gets connection coordinates only, never a password (issue #22, D1).
+`csep-api` imports the Cognito client ID and issuer plus the database endpoint, name, and username from the other stacks. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
 
 ## Design notes
 
-- **IAM auth at the Proxy (`IAMAuth: REQUIRED`, `RequireTLS: true`):** every client must present an IAM token (~15-minute validity, SigV4-signed by the Lambda role). This is the issue #22 consensus; it means the connect layer in the backend must generate a token per connection and set `ssl: 'require'` in the `pg` config. Local dev is unaffected — plain `DATABASE_URL` to local Postgres (D3).
-- **Master credential managed by Secrets Manager (`ManageMasterUserPassword: true`):** the Aurora master password is never echoed or printed; the Proxy reads it through `csep-proxy-role-*`. DB users keep standard password auth — no `rds_iam` conversion needed (issue #22, D2).
+- **IAM auth at the Proxy (`IAMAuth: REQUIRED`, `RequireTLS: true`):** the Lambda signs a short-lived IAM token as `csep_app`; the backend connect layer must generate a token per connection and set `ssl: 'require'` in the `pg` config. Local development remains plain `DATABASE_URL` to local Postgres (D3).
+- **Separate managed credentials:** Aurora's generated master secret is only for administrative bootstrap. A distinct generated app-user secret is the only secret exposed to the Proxy. The Lambda role cannot read either secret and cannot connect as master.
+- **Temporary bootstrap access:** direct cluster ingress is added only for the supplied SSM host security group and is removed by clearing `BootstrapSecurityGroupId`. No bastion resource or permanent direct-access rule is created.
 - **Deletion protection:** default `false` so a broken demo stack can be torn down cleanly (ADR-0004 cost control). Set `true` on any stack the graded demo depends on.
-- **Cluster ingress is Proxy-only** (security-group-to-security-group). Proxy ingress is currently VPC-CIDR-wide so schema bootstrap and tooling can reach it; tightening it to the Lambda SG is a hardening follow-up.
-
-## Open operational detail (for issue #22 follow-up)
-
-Schema bootstrap: `db/schema.sql` cannot be applied *through* the Proxy with password auth (IAM-only by design). Options to settle: (a) apply it once from inside the VPC (temporary bastion / SSM session host) using the master credential, or (b) a small migration Lambda in the VPC using the same IAM path as the app. Not blocking template review.
