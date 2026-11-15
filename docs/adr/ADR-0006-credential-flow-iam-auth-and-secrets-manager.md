@@ -1,6 +1,6 @@
 # ADR 0006: Credential Flow Along the Lambda → RDS Proxy → Aurora Path
 
-- **Status:** Proposed — under team review (see the ADR pull request for the objection window)
+- **Status:** Proposed — under team review (see the ADR pull request for the objection window); schema-bootstrap decision recorded below
 - **Date:** 2026-11-14
 - **Decider:** Backend lead on a 3:1 majority in issue #22 (dissent recorded, partially adopted)
 - **Consulted:** Cao Viet Anh (Worker/SES — dissenting vote), Hieu (Messaging), Phuong (Scheduling), Jamie (Frontend), MrMoi (Support/QA)
@@ -25,11 +25,11 @@ Each Lambda authenticates to the Proxy with a **short-lived (~15 min) IAM auth t
 
 ### D2 — Proxy → Aurora: Secrets Manager-managed credential
 
-The Aurora cluster's master credential is **generated, stored and rotatable by Secrets Manager** (`ManageMasterUserPassword`). The Proxy authenticates to Aurora with that credential through a dedicated role scoped to `secretsmanager:GetSecretValue` / `DescribeSecret`. Database users keep standard password authentication — **no `rds_iam` conversion** (IAM auth in front of the Proxy, password auth behind it is the supported combination).
+The Aurora cluster's master credential is **generated, stored and rotatable by Secrets Manager** (`ManageMasterUserPassword`) and is reserved for administrative/bootstrap use. The Proxy authenticates to Aurora as the dedicated least-privilege **`csep_app` DB user**, using its separate Secrets Manager secret through a role scoped to `secretsmanager:GetSecretValue` / `DescribeSecret`. Database users keep standard password authentication — **no `rds_iam` conversion** (IAM auth in front of the Proxy, password auth behind it is the supported combination).
 
 Sub-decisions (adopted from the dissent):
 - **Rotation: manual for the MVP**; automatic rotation is revisited after Sprint 1.
-- The Proxy serves a **dedicated least-privilege DB user**, not the interactive admin user.
+- The Proxy serves **`csep_app`**, a dedicated least-privilege DB user, not the master/interactive admin user; its secret is distinct from the managed master credential.
 
 ### D3 — Local development
 
@@ -37,7 +37,11 @@ Plain local Postgres with `DATABASE_URL` in a gitignored `.env`, plus a committe
 
 ### D4 — Documentation
 
-This ADR is the record. Implementation details live in the `csep-*` templates (`infra/*.yaml`, PR #23) and the backend connect layer.
+This ADR is the record. Implementation details live in the `csep-*` templates (`infra/*.yaml`, PR #23) and the backend connect layer; the bootstrap runbook lives in PR #23's `infra/README.md`.
+
+### D5 — Schema bootstrap: one-off SSM host
+
+Apply `db/schema.sql` from a temporary host reached through AWS Systems Manager Session Manager, connecting directly to Aurora from inside the VPC with the Secrets Manager-managed master credential. Remove the host after bootstrap; do not retain a permanent bastion. This path is only for bootstrap—the application continues through the Proxy as `csep_app`.
 
 ## Rationale
 
@@ -58,9 +62,9 @@ This ADR is the record. Implementation details live in the `csep-*` templates (`
 
 - **Backend connect layer** (the single seam from ADR-0005): generate an IAM token per connection attempt (cached per warm instance) and set `ssl: 'require'`; keep the D3 local branch. This is the one code change this ADR mandates.
 - **`infra/api.yaml`**: `IAMAuth: REQUIRED` + `RequireTLS: true` on the Proxy; Lambda roles carry `rds-db:connect` and no `secretsmanager` permission. Already drafted in PR #23.
-- **`infra/data.yaml`**: `ManageMasterUserPassword: true`; proxy role scoped to the master secret; manual rotation for the MVP (a scheduled rotation step is a Sprint 2 candidate).
+- **`infra/data.yaml`**: `ManageMasterUserPassword: true`; the Proxy uses the separate `csep_app` secret, while the managed master secret is reserved for bootstrap/admin use; manual rotation for the MVP (a scheduled rotation step is a Sprint 2 candidate).
+- **Schema bootstrap**: use the temporary in-VPC SSM host from D5 and remove it after bootstrap. Operational steps belong in PR #23's `infra/README.md`.
 - **Function-level AWS service permissions** (`ses:SendEmail`, `sqs:ReceiveMessage`, `events:CreateSchedule`, …) are **out of scope here** — they belong to the respective `infra/*.yaml` templates as they are written.
-- **Open item:** schema bootstrap — the IAM-only Proxy accepts no password clients, so `db/schema.sql` cannot be applied *through* it. Options: one-off bastion/SSM host applying the master credential from inside the VPC, or a small migration Lambda using the same IAM path. To be settled in this ADR's PR before merge.
 
 ## References
 
