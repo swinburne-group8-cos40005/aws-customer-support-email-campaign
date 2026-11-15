@@ -41,4 +41,4 @@ Two key feature suggestions were raised during the peer review:
 
 ---
 
-**Evidence:** Screenshots captured during the meeting (Google Meet ID: `zgs-iwdj-xvw`, 8:12 PM) showing the frontend peer review with four members on camera and Thinh Dang's screen share (5 accounts in call); files `29-10-peer-review-1.jpg` and `29-10-peer-review-2.jpg` in `local-only-non-commit/meeting-screenshot/`.
+**Evidence:** Screenshots captured during the meeting (Google Meet ID: `zgs-iwdj-xvw`, 8:12 PM) showing the frontend peer review --- four members with avatars only (cameras off), Huynh Trong Hieu presenting the prototype UI, plus Thinh Dang's screen-share account (5 accounts in call); files `29-10-peer-review-1.jpg` and `29-10-peer-review-2.jpg` in `local-only-non-commit/meeting-screenshot/`.
