@@ -1,15 +1,10 @@
 # Meeting Notes -- User Stories and Advanced Features Discussion
 
-**Date:** 31 October 2026\
-**Project:** AWS Customer Support Email Campaign\
-**Meeting Type:** Team Design Review\
+**Date:** 31 October 2026
+**Project:** AWS Customer Support Email Campaign
+**Meeting Type:** Team Design Review
 **Topics:** User Story Clarification, Database Mapping, API Design, and
 AI Integration
-
-> Note: These meeting notes were reconstructed from screenshots captured
-> during the team meeting. They summarise the materials visible in the
-> screenshots and the discussion topics provided. They are not a
-> verbatim transcript.
 
 ## 1. Meeting Purpose
 

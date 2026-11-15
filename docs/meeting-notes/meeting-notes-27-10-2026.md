@@ -1,14 +1,9 @@
 # Meeting Notes -- Database Schema and Relationships
 
-**Date:** 27 October 2026\
-**Project:** AWS Customer Support Email Campaign\
-**Meeting type:** Team design review\
+**Date:** 27 October 2026
+**Project:** AWS Customer Support Email Campaign
+**Meeting type:** Team design review
 **Topic:** Database schema, entity relationships, and constraints
-
-> **Note:** These notes are reconstructed from screenshots of the team
-> meeting and the database design displayed during the discussion. They
-> summarise the visible design decisions and are not a verbatim meeting
-> transcript.
 
 ## 1. Meeting purpose
 
