@@ -85,6 +85,4 @@ Clarifying the `POST /campaigns/{id}/send` behaviour resolved how immediate disp
 - Align frontend data models and status rendering components with the finalised JSON response fields and the six campaign states.
 - Verify that `docs/api-contract.md` remains fully synchronised with `docs/email-state-machine.md` and `docs/audit-log-strategy.md`.
 
----
 
-**Evidence:** Screenshots captured during the online team meeting on 03 November 2026 (Google Meet ID: `pdw-dzps-gvi`, presented by Thinh Dang with team members Huynh Trong, Phương Moi, NamBuiThe, Cao Viet Anh, and Bách Tùng Nguyễn), showing `docs/api-contract.md` Section 2.1 (`GET /campaigns`, `POST /campaigns/{id}/send`, `POST /campaigns/{id}/cancel`, and `GET /campaigns/{id}/logs`).

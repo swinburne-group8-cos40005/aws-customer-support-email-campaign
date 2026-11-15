@@ -188,8 +188,4 @@ approach open for further consideration.
   functionality before deciding whether to include them in
   implementation.
 
----
 
-**Evidence:** Screenshots captured during the online team meeting on 31
-October 2026, showing the user-story database mapping, campaign
-scheduling rules, schema changes, and Campaign API endpoint design.

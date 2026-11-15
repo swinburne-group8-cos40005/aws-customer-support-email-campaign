@@ -1,8 +1,8 @@
 # Meeting Notes -- ERD to SQL Implementation and Constraint Verification
 
-**Date:** 13 November 2026
+**Date:** 15 November 2026
 **Project:** AWS Customer Support Email Campaign
-**Meeting Type:** Database Schema & Testing Review
+**Meeting Type:** Database Schema & Testing Review (afternoon session, 3:43 PM; schema walkthrough continued in the evening)
 **Topics:** ERD-to-SQL Translation, Seed Data Creation, and Database Constraint Verification
 
 ## 1. Meeting Purpose
@@ -50,3 +50,7 @@ The team reviewed the SQL test data insertion script (`db/seed.sql`) and verifie
 - Confirmed that the SQL schema accurately reflects the ERD and enforces critical campaign invariants at the database level.
 - Verified that all schema creation, seed data loading, and negative constraint test cases passed without unexpected errors.
 - **Follow-up Note (Test 4f):** Ensure the backend application layer consistently applies `lower(trim(email))` before querying or inserting into `email_suppressions`, as PostgreSQL primary keys are case-sensitive by default.
+
+---
+
+**Evidence:** Screenshots captured during the day showing the db-tests evidence review and issue #20 (3:43--3:48 PM) and the schema.sql walkthrough (9:04--9:08 PM); files `15-11-schema-review-1.jpg`--`15-11-schema-review-5.jpg` in `local-only-non-commit/meeting-screenshot/` (numbered in session order).

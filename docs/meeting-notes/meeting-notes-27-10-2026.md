@@ -105,8 +105,4 @@ immediate sending.
 - Check that scheduling logic handles `dispatch_mode` and
   `scheduled_at` consistently, particularly for immediate campaigns.
 
----
 
-**Evidence:** Screenshots captured during the online team meeting on 27
-October 2026, showing the ERD and the relationship summary in
-`docs/erd.md`.

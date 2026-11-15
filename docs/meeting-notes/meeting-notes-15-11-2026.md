@@ -11,19 +11,19 @@ The team consolidated and finalised all open architectural issues governing the 
 
 ## 2. Consolidated System Architecture Decisions
 
-The team reviewed and closed the core infrastructure decision issues to establish a unified baseline across all Sprint 1 components:
+The team reviewed the infrastructure decision issues, closed earlier that week, to establish a unified baseline across all Sprint 1 components:
 
 - **Infrastructure Provisioning via AWS CloudFormation (`Issue #20` / `ADR-0004`):**
   - **Decision:** Provision all AWS resources using declarative CloudFormation YAML templates stored in the repository (`infra/`) rather than manual AWS Console configuration.
 
   - **Rationale:** Ensures full environment reproducibility (`aws cloudformation deploy`), clean diffable review evidence in Pull Requests, and avoids error-prone manual wiring across Cognito, API Gateway, Lambda, Aurora Serverless v2, SQS/DLQ, SES, and EventBridge.
 
-- **Database Access Path -- RDS Proxy + `pg` Driver (`Issue #21`):**
+- **Database Access Path -- RDS Proxy + `pg` Driver (`Issue #21` / `ADR-0005`):**
   - **Decision:** Selected **Option A (RDS Proxy + native `pg` driver)** over the HTTP-based Aurora Data API.
 
   - **Rationale:** Preserves native SQL transactions (`BEGIN`/`COMMIT`), provides sub-millisecond wire-protocol latency, and efficiently pools connections for high-concurrency Worker updates and Dispatcher bulk inserts without rewriting the existing `db.ts` access layer.
 
-- **Credential-less IAM Database Authentication (`Issue #22` / `ADR-0005`):**
+- **Credential-less IAM Database Authentication (`Issue #22` / `ADR-0006`, in review):**
   - **Decision:** Lambdas authenticate to RDS Proxy using short-lived **IAM tokens** over TLS, while RDS Proxy authenticates to Aurora Serverless v2 using master credentials managed in **AWS Secrets Manager**.
 
   - **Benefit:** Eliminates hardcoded database passwords in Lambda environment variables and enforces per-function IAM roles.
@@ -66,3 +66,11 @@ The team demonstrated the backend implementation and reviewed the CloudFormation
   - Execute end-to-end CloudFormation stack deployment tests in the `dev` environment and apply `db/schema.sql` to the provisioned Aurora cluster.
 
   - Tighten `AllowOrigins` in `infra/api.yaml` from `["*"]` to the specific frontend origin prior to public exposure.
+
+## 6. Attendance
+
+- All 6 members in the call plus Thinh Dang's screen-share account (counter showed 7).
+
+---
+
+**Evidence:** Screenshots captured during the evening walkthrough (7:34 PM: issues #20/#21 review; 9:11--9:26 PM: PR #23 walkthrough) --- files `15-11-infra-walkthrough-1.jpg`--`15-11-infra-walkthrough-7.jpg` in `local-only-non-commit/meeting-screenshot/` (numbered in session order).
