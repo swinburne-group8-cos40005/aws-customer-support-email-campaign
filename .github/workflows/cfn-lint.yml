@@ -1,0 +1,32 @@
+name: cfn-lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cfn-lint:
+    name: cfn-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Skip when infra templates unchanged
+        id: changes
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "$BASE" HEAD -- 'infra/*.yaml' 'infra/**/*.yaml' | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No infra/*.yaml changes — cfn-lint skipped."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install cfn-lint
+        if: steps.changes.outputs.run == 'true'
+        run: pip install cfn-lint
+      - name: Lint CloudFormation templates
+        if: steps.changes.outputs.run == 'true'
+        run: cfn-lint infra/*.yaml
