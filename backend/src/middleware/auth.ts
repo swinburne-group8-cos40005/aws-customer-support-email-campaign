@@ -29,84 +29,48 @@ import { UnauthorizedError } from '../utils/errors';
 export type ApiEvent = APIGatewayProxyEventV2WithJWTAuthorizer;
 
 /**
- * Per-request state flowing through the middleware chain. Middleware
- * populate it as the request travels inward (Express mutates `req` the
- * same way); the controller reads the final result.
+ * Identity the auth middleware resolved from the verified JWT claims
+ * and hands to controllers. Controllers must never read identity from
+ * the request body — userId always comes from here.
  *
  * @example
- * // Before the auth middleware ran:
- * {}
- *
- * // After requireCognitoIdentity ran:
- * { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * const context = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * console.log(context.userId) // Output: the caller's Cognito sub
  */
-export interface RequestState {
-    userId?: string;
+export interface RequestContext {
+    userId: string;
 }
 
 /**
- * The state a controller may rely on: the auth middleware has already
- * run, so userId is guaranteed to be present.
+ * A controller: receives the HTTP API v2 event plus the RequestContext
+ * resolved by requireCognitoIdentity, and answers with a proxy result.
  *
  * @example
- * const state = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
- * console.log(state.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
- */
-export type AuthenticatedState = RequestState & { userId: string };
-
-/**
- * Passes control to the next stage of the chain. A middleware that does
- * not call next() short-circuits the chain (e.g. an early 401).
- *
- * @example
- * const result = await next()
- * console.log(result.statusCode) // Output: 201 on a successful create
- */
-export type Next = () => Promise<APIGatewayProxyResult>;
-
-/**
- * One stage of the chain, in the style of Express middleware:
- * receives the event, the shared RequestState and a next() callback.
- * Call next() to continue; return a response instead to short-circuit.
- *
- * @example
- * const latencyProbe: Middleware = async (event, state, next) => {
- *     const started = Date.now()
- *     const result = await next()
- *     console.log(Date.now() - started) // Output: e.g. 42
- *     return result
- * }
- */
-export type Middleware = (
-    event: ApiEvent,
-    state: RequestState,
-    next: Next,
-) => Promise<APIGatewayProxyResult>;
-
-/**
- * A controller: the last stage of the chain. It receives the event and
- * the authenticated state (userId guaranteed by requireCognitoIdentity).
- *
- * @example
- * const controller: InnerHandler = async (event, state) => {
- *     console.log(state.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
+ * const controller: InnerHandler = async (event, context) => {
+ *     console.log(context.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
  *     return buildSuccessResponse(201, { name: 'Black Friday' })
  * }
  */
 export type InnerHandler = (
     event: ApiEvent,
-    state: AuthenticatedState,
+    context: RequestContext,
 ) => Promise<APIGatewayProxyResult>;
 
 /**
- * The composed chain, callable straight from the Lambda runtime with
- * just the event.
+ * A middleware-wrapped handler in the chain. `context` is optional
+ * because the chain entry (the Lambda runtime) has none yet:
+ * requireCognitoIdentity builds the real RequestContext from verified
+ * claims and ignores whatever the runtime passed as its second argument.
  *
  * @example
- * const response = await handler(event)
- * console.log(response.statusCode) // Output: 201 on success
+ * // The Lambda runtime calls the composed chain with just the event:
+ * const result = await composedHandler(event)
+ * console.log(result.statusCode) // Output: 201 on success, 401 without claims
  */
-export type ComposedHandler = (event: ApiEvent) => Promise<APIGatewayProxyResult>;
+export type HandlerFn = (
+    event: ApiEvent,
+    context?: RequestContext,
+) => Promise<APIGatewayProxyResult>;
 
 /**
  * Runtime shape accepted for requestContext.authorizer. Deliberately
@@ -157,29 +121,36 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
 };
 
 /**
- * Auth middleware: resolves the caller's identity from the verified
- * JWT claims, stores it on the shared state, then continues the chain.
- * The gateway is the primary gate, but this keeps the endpoint safe
- * even if a route is ever misconfigured in the template.
+ * Middleware guarding every endpoint: refuses to run the inner handler
+ * without a resolved identity. The gateway is the primary gate, but this
+ * keeps the endpoint safe even if a route is ever misconfigured in the
+ * template.
+ *
+ * @param inner - Controller to run once the identity is resolved.
+ *
+ * @returns A chain handler that throws UnauthorizedError when no valid
+ *          Cognito claims are present, otherwise calls the controller
+ *          with the resolved RequestContext.
+ *
+ * @throws UnauthorizedError When the event carries no Cognito `sub`.
  *
  * @example
- * const middleware: Middleware[] = [
- *     logRequestSummary,
- *     catchHandlerErrors,
- *     requireCognitoIdentity,
- * ]
- * const handler = composeMiddleware(middleware, controller)
- * const response = await handler(event)
- * console.log(response.statusCode) // Output: 201 when claims exist,
- *                                  //           401 envelope otherwise
+ * const guarded = requireCognitoIdentity(controller)
+ * const result = await guarded(event)
+ * console.log(result.statusCode) // Output: 201 when claims exist,
+ *                                //           401 envelope when they do not
  */
-export const requireCognitoIdentity: Middleware = async (event, state, next) => {
-    const sub = extractCognitoSub(event);
-    if (!sub) {
-        throw new UnauthorizedError();
-    }
+export const requireCognitoIdentity = (inner: InnerHandler): HandlerFn => {
+    return async (event) => {
+        const sub = extractCognitoSub(event);
+        if (!sub) {
+            throw new UnauthorizedError();
+        }
 
-    state.userId = sub;
+        const context: RequestContext = {
+            userId: sub,
+        };
 
-    return next();
+        return inner(event, context);
+    };
 };

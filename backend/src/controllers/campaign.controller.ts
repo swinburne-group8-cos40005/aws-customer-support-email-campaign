@@ -12,7 +12,7 @@ import type { InnerHandler } from '../middleware';
  * Business rules live in the service; SQL lives in repositories.
  *
  * @param event - HTTP API v2 event (body is raw JSON text).
- * @param state - Authenticated state resolved by the auth middleware.
+ * @param context - Request context resolved by the auth middleware.
  *
  * @returns 201 with the created campaign in contract field names.
  *
@@ -22,12 +22,12 @@ import type { InnerHandler } from '../middleware';
  *         (bubbled from the service, HTTP 404).
  *
  * @example
- * const state = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
- * const response = await handleCreateCampaignRequest(event, state)
+ * const context = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * const response = await handleCreateCampaignRequest(event, context)
  * console.log(response.statusCode) // Output: 201 — or 400/404/500 as
  *                                  // an error envelope per §1.3
  */
-export const handleCreateCampaignRequest: InnerHandler = async (event, state) => {
+export const handleCreateCampaignRequest: InnerHandler = async (event, context) => {
     let raw: unknown;
     try {
         raw = JSON.parse(event.body ?? '');
@@ -47,7 +47,7 @@ export const handleCreateCampaignRequest: InnerHandler = async (event, state) =>
 
     const command = {
         ...parsed.data,
-        userId: state.userId,
+        userId: context.userId,
     };
 
     const row = await createDraftCampaign(command);
