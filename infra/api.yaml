@@ -180,12 +180,3 @@ Outputs:
     Value: !GetAtt CreateCampaignFunction.Arn
     Export:
       Name: csep-api-CreateCampaignFunctionArn
-  FrontendConfig:
-    Description: JSON the SPA build reads (client ID, hosted-UI domain, API base URL)
-    Value: !Sub
-      - '{"cognitoClientId":"${ClientId}","cognitoDomain":"${Domain}","apiBaseUrl":"${ApiUrl}"}'
-      - ClientId:
-          Fn::ImportValue: csep-auth-UserPoolClientId
-        Domain:
-          Fn::ImportValue: csep-auth-HostedUiDomain
-        ApiUrl: !GetAtt HttpApi.ApiEndpoint
