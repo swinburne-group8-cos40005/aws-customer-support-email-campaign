@@ -11,13 +11,14 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-  CallbackUrls:
-    Type: CommaDelimitedList
-    Default: "http://localhost:5173"
-    Description: Redirect URIs after login — add the deployed frontend origin before public use
-  LogoutUrls:
-    Type: CommaDelimitedList
-    Default: "http://localhost:5173"
+  FrontendOrigin:
+    Type: String
+    Description: Deployed frontend origin used as hosted-UI callback and sign-out URL
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
+    ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
+  
+Conditions:
+  AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
 Resources:
   UserPool:
@@ -74,8 +75,14 @@ Resources:
         - profile
       SupportedIdentityProviders:
         - COGNITO
-      CallbackURLs: !Ref CallbackUrls
-      LogoutURLs: !Ref LogoutUrls
+      CallbackURLs: !If
+        - AllowLocalhost
+        - [!Ref FrontendOrigin, "http://localhost:5173"]
+        - [!Ref FrontendOrigin]
+      LogoutURLs: !If
+        - AllowLocalhost
+        - [!Ref FrontendOrigin, "http://localhost:5173"]
+        - [!Ref FrontendOrigin]
       TokenValidityUnits:
         AccessToken: hours
         IdToken: hours
