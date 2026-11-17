@@ -1,5 +1,5 @@
-import type { Queryable } from '../../src/db/connection';
-import { insertAuditRecord } from '../../src/repositories/audit-log.repository';
+import type { Queryable } from '#db/connection';
+import { insertAuditRecord } from '#repositories/audit-log.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 

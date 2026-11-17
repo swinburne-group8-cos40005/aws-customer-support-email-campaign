@@ -1,8 +1,8 @@
-import { createCampaignSchema } from '../schemas/campaign.schema';
-import { createDraftCampaign, mapCampaignRowToResponse } from '../services/campaign.service';
-import { ValidationError } from '../utils/errors';
-import { buildSuccessResponse } from '../utils/http';
-import type { ApiEvent, AuthenticatedState } from '../http/auth';
+import { createCampaignSchema } from '#schemas/campaign.schema';
+import { createDraftCampaign, mapCampaignRowToResponse } from '#services/campaign.service';
+import { ValidationError } from '#utils/errors';
+import { buildSuccessResponse } from '#utils/http';
+import type { ApiEvent, AuthenticatedState } from '#http/auth';
 import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
@@ -46,6 +46,7 @@ export const handleCreateCampaignRequest = async (
         const field = issue.path.length > 0
             ? String(issue.path[0])
             : 'body';
+            
         throw new ValidationError(field, issue.message);
     }
 

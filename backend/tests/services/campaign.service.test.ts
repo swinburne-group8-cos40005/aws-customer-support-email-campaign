@@ -1,26 +1,26 @@
-import { runInTransaction } from '../../src/db/connection';
-import { createDraftCampaign } from '../../src/services/campaign.service';
-import { checkCatalogExists } from '../../src/repositories/catalog.repository';
-import { insertCampaignRow } from '../../src/repositories/campaign.repository';
-import { insertAuditRecord } from '../../src/repositories/audit-log.repository';
-import type { Queryable } from '../../src/db/connection';
-import type { CampaignRow } from '../../src/repositories/campaign.repository';
+import { runInTransaction } from '#db/connection';
+import { createDraftCampaign } from '#services/campaign.service';
+import { checkCatalogExists } from '#repositories/catalog.repository';
+import { insertCampaignRow } from '#repositories/campaign.repository';
+import { insertAuditRecord } from '#repositories/audit-log.repository';
+import type { Queryable } from '#db/connection';
+import type { CampaignRow } from '#repositories/campaign.repository';
 
-jest.mock('../../src/db/connection', () => ({
+jest.mock('#db/connection', () => ({
     runInTransaction: jest.fn(),
 }));
 
-jest.mock('../../src/repositories/catalog.repository', () => ({
+jest.mock('#repositories/catalog.repository', () => ({
     checkCatalogExists: jest.fn(),
 }));
 
-jest.mock('../../src/repositories/campaign.repository', () => ({
+jest.mock('#repositories/campaign.repository', () => ({
     insertCampaignRow: jest.fn(),
-    mapCampaignRowToResponse: jest.requireActual('../../src/repositories/campaign.repository')
+    mapCampaignRowToResponse: jest.requireActual('#repositories/campaign.repository')
         .mapCampaignRowToResponse,
 }));
 
-jest.mock('../../src/repositories/audit-log.repository', () => ({
+jest.mock('#repositories/audit-log.repository', () => ({
     insertAuditRecord: jest.fn(),
 }));
 

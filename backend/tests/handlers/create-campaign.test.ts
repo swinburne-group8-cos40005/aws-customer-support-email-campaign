@@ -1,14 +1,14 @@
-import { handler } from '../../src/handlers/create-campaign';
-import { createDraftCampaign } from '../../src/services/campaign.service';
-import { NotFoundError } from '../../src/utils/errors';
+import { handler } from '#handlers/create-campaign';
+import { createDraftCampaign } from '#services/campaign.service';
+import { NotFoundError } from '#utils/errors';
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 
-jest.mock('../../src/services/campaign.service', () => ({
+jest.mock('#services/campaign.service', () => ({
     createDraftCampaign: jest.fn(),
     // The controller maps the 201 body through the repository mapper that
     // the service re-exports; keep the real one so the contract shape is
     // asserted end-to-end.
-    mapCampaignRowToResponse: jest.requireActual('../../src/services/campaign.service')
+    mapCampaignRowToResponse: jest.requireActual('#services/campaign.service')
         .mapCampaignRowToResponse,
 }));
 

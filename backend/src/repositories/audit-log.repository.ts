@@ -1,4 +1,4 @@
-import type { Queryable } from '../db/connection';
+import type { Queryable } from '#db/connection';
 
 export interface AuditEntry {
     userId: string;

@@ -1,12 +1,12 @@
-import { runInTransaction } from '../db/connection';
-import { insertAuditRecord } from '../repositories/audit-log.repository';
-import { checkCatalogExists } from '../repositories/catalog.repository';
+import { runInTransaction } from '#db/connection';
+import { insertAuditRecord } from '#repositories/audit-log.repository';
+import { checkCatalogExists } from '#repositories/catalog.repository';
 import {
     insertCampaignRow,
     mapCampaignRowToResponse,
     type CampaignRow,
-} from '../repositories/campaign.repository';
-import { NotFoundError } from '../utils/errors';
+} from '#repositories/campaign.repository';
+import { NotFoundError } from '#utils/errors';
 
 /** What the controller is allowed to hand over — user identity comes from the authenticated state, never from the body. */
 export interface CreateCampaignCommand {

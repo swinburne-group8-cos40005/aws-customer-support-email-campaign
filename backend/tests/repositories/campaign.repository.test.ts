@@ -1,5 +1,5 @@
-import type { Queryable } from '../../src/db/connection';
-import { insertCampaignRow, mapCampaignRowToResponse, type CampaignRow } from '../../src/repositories/campaign.repository';
+import type { Queryable } from '#db/connection';
+import { insertCampaignRow, mapCampaignRowToResponse, type CampaignRow } from '#repositories/campaign.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Signer } from '@aws-sdk/rds-signer';
 import { Pool, type PoolClient } from 'pg';
-import { loadDatabaseEnv, RDS_CA_BUNDLE_PATH, type Env } from '../config/env';
+import { loadDatabaseEnv, RDS_CA_BUNDLE_PATH, type Env } from '#config/env';
 
 export interface Row {
     [key: string]: unknown;

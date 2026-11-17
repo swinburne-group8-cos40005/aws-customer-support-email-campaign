@@ -40,6 +40,11 @@ Rules of thumb:
   contract envelope from docs/api-contract.md §1.3.
 - One handler is a straight sequential pipeline — auth, controller,
   error mapping, logging as direct calls. No middleware framework.
+- Internal imports use the package.json subpath aliases
+  (`#utils/errors`, `#db/connection`, `#services/...`) instead of
+  `../../` relative paths. TypeScript resolves them via
+  `moduleResolution: node16`, Jest via `moduleNameMapper`, and the
+  esbuild bundle at deploy time resolves the `imports` field natively.
 
 ## Database connectivity (two modes)
 

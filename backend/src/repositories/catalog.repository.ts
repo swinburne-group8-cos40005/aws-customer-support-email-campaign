@@ -1,4 +1,4 @@
-import type { Queryable } from '../db/connection';
+import type { Queryable } from '#db/connection';
 
 /**
  * Tables a repository caller may probe for existence. The union type is

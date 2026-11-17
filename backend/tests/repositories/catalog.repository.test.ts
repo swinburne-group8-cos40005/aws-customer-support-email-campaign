@@ -1,5 +1,5 @@
-import type { Queryable } from '../../src/db/connection';
-import { checkCatalogExists } from '../../src/repositories/catalog.repository';
+import type { Queryable } from '#db/connection';
+import { checkCatalogExists } from '#repositories/catalog.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 
