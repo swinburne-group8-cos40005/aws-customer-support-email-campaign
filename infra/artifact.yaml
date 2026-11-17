@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-artifact stack (ADR-0004, amended in issue #31). Holds packaged
+  Lambda bundles in S3 so every Lambda-carrying stack points its Code
+  at one shared location. Deployed before all other stacks; the bucket
+  name is exported and imported, never passed by hand.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+Resources:
+  # Bucket names are globally unique, so the account ID is part of the
+  # name — same approach as the hosted-UI domain in csep-auth.
+  CodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub csep-artifact-${AWS::AccountId}-${EnvironmentName}
+      # Old bundle versions stay available for short-notice rollback
+      # of a Lambda to a previous package.
+      VersioningConfiguration:
+        Status: Enabled
+      # Public access is blocked by default on new buckets; it is set
+      # here explicitly so the bucket can never drift open on an
+      # update. Packages are internal build artifacts only.
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Cost control (ADR-0004): uploaded bundles are disposable.
+      # Noncurrent versions expire after 30 days, keeping a small
+      # rollback window instead of accumulating every past build.
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-package-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+              NewerNoncurrentVersions: 3
+
+Outputs:
+  CodeBucketName:
+    Description: Bucket holding packaged Lambda bundles; imported by csep-api
+    Value: !Ref CodeBucket
+    Export:
+      Name: csep-artifact-CodeBucketName
