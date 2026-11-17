@@ -19,11 +19,14 @@ Provision all shared and demo-critical infrastructure with **AWS CloudFormation 
 
 | Template | Stack name | Contents | Unblocks |
 | :--- | :--- | :--- | :--- |
+| `infra/artifact.yaml` | `csep-artifact` | S3 bucket holding packaged Lambda bundles (versioned, private) | #5, #29 deployments |
 | `infra/auth.yaml` | `csep-auth` | Cognito user pool, app client (PKCE, rotation, revocation), hosted UI domain | #9 login UI |
 | `infra/api.yaml` | `csep-api` | API Gateway HTTP API, JWT authorizer, Lambda functions, IAM roles, `DATABASE_URL` env | #5 endpoints |
 | `infra/messaging.yaml` | `csep-messaging` | SQS main queue + DLQ, SNS topic, SES event destinations, EventBridge Scheduler | #6, #7, #10, #11 |
 | `infra/data.yaml` | `csep-data` | Aurora Serverless v2 cluster, RDS Proxy (per ADR-0001 consequence on connection pooling) | #4/#16 schema |
 | `infra/observability.yaml` | `csep-observability` | CloudWatch alarms, dashboards, alerting rules | #14 |
+
+**Amended 2026-11-16 (issue #31):** added `csep-artifact` as a sixth stack. Lambda functions reference their packaged code in S3; a shared artifact bucket keeps that location in one place and is imported by `csep-api` (`csep-artifact-CodeBucketName`) rather than passed as a deploy-time parameter. The stack is deployed before every other stack.
 
 ### Naming convention
 - Stack names: `csep-<concern>` (Customer Support Email Platform).
@@ -53,6 +56,7 @@ Provision all shared and demo-critical infrastructure with **AWS CloudFormation 
 
 ## References
 - Issue #20: decision thread and consensus (2026-11-12)
+- Issue #31: `csep-artifact` amendment — artifact bucket stack (2026-11-16)
 - ADR-0001: serverless Lambda stack this infra targets
 - ADR-0002: EventBridge/SQS topology wired by `infra/messaging.yaml`
 - ADR-0003: Aurora cluster provisioned by `infra/data.yaml`
