@@ -5,3 +5,5 @@ dist/
 vite.config.*.timestamp-*
 *.tsbuildinfo
 *.log
+
+.DS_Store
