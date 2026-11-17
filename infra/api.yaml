@@ -29,6 +29,13 @@ Parameters:
   DbPort:
     Type: Number
     Default: 5432
+  FrontendOrigin:
+    Type: String
+    Description: Deployed frontend origin allowed by CORS (no trailing slash)
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
+
+Conditions:
+  AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
 Resources:
   HttpApi:
@@ -37,7 +44,10 @@ Resources:
       Name: !Sub csep-api-${EnvironmentName}
       ProtocolType: HTTP
       CorsConfiguration:
-        AllowOrigins: ["*"] # tighten to the frontend origin before public exposure
+        AllowOrigins: !If
+          - AllowLocalhost
+          - [!Ref FrontendOrigin, "https://localhost:5713"]
+          - [!Ref FrontendOrigin]
         AllowMethods: [GET, POST, PUT, DELETE]
         AllowHeaders: [Authorization, Content-Type]
         MaxAge: 86400
@@ -170,3 +180,12 @@ Outputs:
     Value: !GetAtt CreateCampaignFunction.Arn
     Export:
       Name: csep-api-CreateCampaignFunctionArn
+  FrontendConfig:
+    Description: JSON the SPA build reads (client ID, hosted-UI domain, API base URL)
+    Value: !Sub
+      - '{"cognitoClientId":"${ClientId}","cognitoDomain":"${Domain}","apiBaseUrl":"${ApiUrl}"}'
+      - ClientId:
+          Fn::ImportValue: csep-auth-UserPoolClientId
+        Domain:
+          Fn::ImportValue: csep-auth-HostedUiDomain
+        ApiUrl: !GetAtt HttpApi.ApiEndpoint
