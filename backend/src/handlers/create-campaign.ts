@@ -13,6 +13,8 @@ import { composeMiddleware } from '../middleware';
  *          turns every failure into the contract error envelope).
  *
  * @example
- * const result = await handler({ version: '2.0', ... });
+ * const response = await handler(event)
+ * console.log(response.statusCode) // Output: 201 — never rejects; every
+ *                                  // failure arrives as an error envelope
  */
 export const handler = composeMiddleware(handleCreateCampaignRequest);

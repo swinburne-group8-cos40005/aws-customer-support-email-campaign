@@ -11,7 +11,10 @@ import type { HandlerFn } from './auth';
  * @returns A chain handler that logs then delegates.
  *
  * @example
- * const logged = logRequestSummary(catchHandlerErrors(controller));
+ * const logged = logRequestSummary(inner)
+ * const result = await logged(event)
+ * console.log(result.statusCode) // Output: 201 — and one log line:
+ *                                // "POST /v1/campaigns -> 201 (42ms)"
  */
 export const logRequestSummary = (inner: HandlerFn): HandlerFn => {
     return async (event, context) => {

@@ -26,9 +26,9 @@ const COLUMN_BY_TABLE: Record<CatalogTable, 'template_id' | 'segment_id'> = {
  * @returns True when at least one row matches the id.
  *
  * @example
- * if (!(await checkCatalogExists(tx, 'templates', command.templateId))) {
- *     throw new NotFoundError('template', command.templateId);
- * }
+ * const templateExists = await checkCatalogExists(tx, 'templates', TEMPLATE_ID)
+ * console.log(templateExists) // Output: true when the row exists
+ *                             //         false when it does not
  */
 export const checkCatalogExists = async (
     tx: Queryable,

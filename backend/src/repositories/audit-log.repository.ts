@@ -20,13 +20,15 @@ export interface AuditEntry {
  *                snapshot per docs/audit-log-strategy.md §4.
  *
  * @example
- * await insertAuditRecord(tx, {
- *     userId: command.userId,
+ * const entry = {
+ *     userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f',
  *     action: 'create',
  *     entityType: 'campaign',
- *     entityId: row.campaign_id,
- *     changes: { before: null, after: { status: row.status } },
- * });
+ *     entityId: '33333333-3333-4000-8000-000000000009',
+ *     changes: { before: null, after: { status: 'draft' } },
+ * }
+ * console.log(entry.changes) // Output: { before: null, after: { status: 'draft' } }
+ * await insertAuditRecord(tx, entry)
  */
 export const insertAuditRecord = async (tx: Queryable, entry: AuditEntry): Promise<void> => {
     await tx.query(

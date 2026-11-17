@@ -16,7 +16,9 @@ const buildJsonResponse = (statusCode: number, payload: unknown): APIGatewayProx
  * @returns A complete APIGatewayProxyResult ready to return from Lambda.
  *
  * @example
- * return buildSuccessResponse(201, mapCampaignRowToResponse(row));
+ * const response = buildSuccessResponse(201, { campaignId: '33333333-3333-4000-8000-000000000009' })
+ * console.log(response.statusCode) // Output: 201
+ * console.log(response.body)       // Output: '{"campaignId":"33333333-3333-4000-8000-000000000009"}'
  */
 export const buildSuccessResponse = (statusCode: number, data: unknown): APIGatewayProxyResult =>
     buildJsonResponse(statusCode, data);
@@ -34,10 +36,18 @@ export const buildSuccessResponse = (statusCode: number, data: unknown): APIGate
  * @returns A complete APIGatewayProxyResult ready to return from Lambda.
  *
  * @example
- * return buildErrorResponse(400, 'VALIDATION_ERROR', 'name is required.', {
- *     field: 'name',
- *     reason: 'name is required.',
- * });
+ * const response = buildErrorResponse(
+ *     404,
+ *     'RESOURCE_NOT_FOUND',
+ *     'template with ID 22222222-... does not exist in Aurora database',
+ *     { field: 'templateId', reason: 'UUID does not exist in Aurora database' },
+ * )
+ * console.log(JSON.parse(response.body).error)
+ * // Output: {
+ * //   code: 'RESOURCE_NOT_FOUND',
+ * //   message: 'template with ID 22222222-... does not exist in Aurora database',
+ * //   details: { field: 'templateId', reason: 'UUID does not exist in Aurora database' },
+ * // }
  */
 export const buildErrorResponse = (
     statusCode: number,

@@ -18,7 +18,9 @@ export type { HandlerFn, InnerHandler, RequestContext } from './auth';
  *          with just the event; the identity is rebuilt inside auth.
  *
  * @example
- * export const handler = composeMiddleware(createCampaignController);
+ * const handler = composeMiddleware(handleCreateCampaignRequest)
+ * const result = await handler(event)
+ * console.log(result.statusCode) // Output: 201
  */
 export const composeMiddleware = (controller: InnerHandler): HandlerFn => {
     return (event) => {

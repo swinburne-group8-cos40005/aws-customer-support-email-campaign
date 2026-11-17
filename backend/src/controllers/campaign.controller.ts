@@ -22,8 +22,10 @@ import type { InnerHandler } from '../middleware';
  *         (bubbled from the service, HTTP 404).
  *
  * @example
- * // wired in src/handlers/create-campaign.ts:
- * export const handler = composeMiddleware(handleCreateCampaignRequest);
+ * const context = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * const response = await handleCreateCampaignRequest(event, context)
+ * console.log(response.statusCode) // Output: 201 — or 400/404/500 as
+ *                                  // an error envelope per §1.3
  */
 export const handleCreateCampaignRequest: InnerHandler = async (event, context) => {
     let raw: unknown;

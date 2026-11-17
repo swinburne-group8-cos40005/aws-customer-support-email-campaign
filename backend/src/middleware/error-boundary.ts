@@ -16,7 +16,10 @@ import type { HandlerFn } from './auth';
  *          error-envelope response.
  *
  * @example
- * const guarded = catchHandlerErrors(requireCognitoIdentity(controller));
+ * const guarded = catchHandlerErrors(requireCognitoIdentity(controller))
+ * const result = await guarded(event)
+ * console.log(result.statusCode) // Output: 500 with an INTERNAL_ERROR
+ *                                // envelope when a non-ApiError escapes
  */
 export const catchHandlerErrors = (inner: HandlerFn): HandlerFn => {
     return async (event, context) => {

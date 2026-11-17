@@ -74,7 +74,9 @@ const createPool = (env: Env): Pool => {
  *         (propagated from loadDatabaseEnv).
  *
  * @example
- * const client = await getDatabasePool().connect();
+ * const pool = getDatabasePool()
+ * console.log(pool.totalCount) // Output: 0 — rises only once the first
+ *                              //         connection is actually opened
  */
 export const getDatabasePool = (): Pool => {
     if (!pool) {
@@ -88,7 +90,9 @@ export const getDatabasePool = (): Pool => {
  * builds a fresh one. Used by integration tests between scenarios.
  *
  * @example
- * await closeDatabasePool();
+ * await closeDatabasePool()
+ * console.log('pool closed') // Output: 'pool closed' — the next
+ *                            // getDatabasePool() builds a fresh pool
  */
 export const closeDatabasePool = async (): Promise<void> => {
     if (pool) {
@@ -113,9 +117,12 @@ export const closeDatabasePool = async (): Promise<void> => {
  *
  * @example
  * const row = await runInTransaction(async (tx) => {
- *     await insertCampaignRow(tx, input);
- *     await insertAuditRecord(tx, entry);
- * });
+ *     const created = await insertCampaignRow(tx, input)
+ *     await insertAuditRecord(tx, auditEntry)
+ *     return created
+ * })
+ * console.log(row.status) // Output: 'draft' — committed only when every
+ *                         // step succeeded; any throw rolls it all back
  */
 export async function runInTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
     const client: PoolClient = await getDatabasePool().connect();

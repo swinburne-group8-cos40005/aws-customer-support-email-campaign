@@ -2,29 +2,70 @@ import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResult } f
 import { UnauthorizedError } from '../utils/errors';
 
 /**
- * The API is an HTTP API (infra/api.yaml, PayloadFormatVersion 2.0) with
- * a JWT authorizer, so Lambda receives this exact event shape: claims
- * live under requestContext.authorizer.jwt.claims — not the v1
- * authorizer.claims path used by REST API events.
+ * The event the Lambda receives — HTTP API (infra/api.yaml,
+ * PayloadFormatVersion 2.0) with a JWT authorizer. Not the REST API v1
+ * shape: claims live under requestContext.authorizer.jwt.claims.
+ *
+ * @example
+ * // What API Gateway actually delivers (abridged):
+ * {
+ *     version: '2.0',
+ *     routeKey: 'POST /v1/campaigns',
+ *     rawPath: '/v1/campaigns',
+ *     requestContext: {
+ *         http: { method: 'POST', path: '/v1/campaigns' },
+ *         authorizer: {
+ *             jwt: {
+ *                 claims: {
+ *                     sub: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f',
+ *                     email: 'agent@fpt-semail.onmicrosoft.com',
+ *                 },
+ *             },
+ *         },
+ *     },
+ *     body: '{"name":"Black Friday","templateId":"...","segmentId":"..."}',
+ * }
  */
 export type ApiEvent = APIGatewayProxyEventV2WithJWTAuthorizer;
 
-/** Identity resolved by the JWT authorizer and handed to controllers. */
+/**
+ * Identity the auth middleware resolved from the verified JWT claims
+ * and hands to controllers. Controllers must never read identity from
+ * the request body — userId always comes from here.
+ *
+ * @example
+ * const context = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * console.log(context.userId) // Output: the caller's Cognito sub
+ */
 export interface RequestContext {
     userId: string;
 }
 
-/** Controllers receive the event plus the resolved request context. */
+/**
+ * A controller: receives the HTTP API v2 event plus the RequestContext
+ * resolved by requireCognitoIdentity, and answers with a proxy result.
+ *
+ * @example
+ * const controller: InnerHandler = async (event, context) => {
+ *     console.log(context.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
+ *     return buildSuccessResponse(201, { name: 'Black Friday' })
+ * }
+ */
 export type InnerHandler = (
     event: ApiEvent,
     context: RequestContext,
 ) => Promise<APIGatewayProxyResult>;
 
 /**
- * A middleware-wrapped handler in the chain. `context` is optional because
- * the chain entry (the Lambda runtime) has none yet: requireCognitoIdentity builds the
- * real RequestContext from verified claims and ignores whatever the
- * runtime passed as its second argument.
+ * A middleware-wrapped handler in the chain. `context` is optional
+ * because the chain entry (the Lambda runtime) has none yet:
+ * requireCognitoIdentity builds the real RequestContext from verified
+ * claims and ignores whatever the runtime passed as its second argument.
+ *
+ * @example
+ * // The Lambda runtime calls the composed chain with just the event:
+ * const result = await composedHandler(event)
+ * console.log(result.statusCode) // Output: 201 on success, 401 without claims
  */
 export type HandlerFn = (
     event: ApiEvent,
@@ -32,9 +73,16 @@ export type HandlerFn = (
 ) => Promise<APIGatewayProxyResult>;
 
 /**
- * Runtime shape we accept for the authorizer context. Deliberately looser
- * than the generated event type so a stripped/misconfigured authorizer
- * degrades to `null` instead of throwing mid-request.
+ * Runtime shape accepted for requestContext.authorizer. Deliberately
+ * looser than the generated event type so a stripped or misconfigured
+ * authorizer degrades to `null` instead of throwing mid-request.
+ *
+ * @example
+ * // Authenticated request — authorizer present:
+ * { jwt: { claims: { sub: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' } } }
+ *
+ * // Misconfigured route — authorizer missing:
+ * undefined // -> extractCognitoSub returns null -> 401
  */
 type JwtAuthorizerContext = {
     authorizer?: {
@@ -56,7 +104,9 @@ type JwtAuthorizerContext = {
  * @returns The verified Cognito subject, or null when absent.
  *
  * @example
- * const sub = extractCognitoSub(event); // 'usr-agent-1'
+ * const sub = extractCognitoSub(event)
+ * console.log(sub) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
+ *                  // (null when the authorizer context is stripped)
  */
 const extractCognitoSub = (event: ApiEvent): string | null => {
     const authorizer = (event.requestContext as JwtAuthorizerContext).authorizer;
@@ -85,8 +135,10 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
  * @throws UnauthorizedError When the event carries no Cognito `sub`.
  *
  * @example
- * export const handler = composeMiddleware(createCampaignController);
- * // requireCognitoIdentity runs inside that composition.
+ * const guarded = requireCognitoIdentity(controller)
+ * const result = await guarded(event)
+ * console.log(result.statusCode) // Output: 201 when claims exist,
+ *                                //           401 envelope when they do not
  */
 export const requireCognitoIdentity = (inner: InnerHandler): HandlerFn => {
     return async (event) => {

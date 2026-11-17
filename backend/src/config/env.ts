@@ -53,7 +53,10 @@ export const RDS_CA_BUNDLE_PATH = 'assets/rds-ca-global-bundle.pem';
  *         becomes an HTTP response.
  *
  * @example
- * const env = loadDatabaseEnv(); // { mode: 'iam', DB_HOST: ..., ... }
+ * const env = loadDatabaseEnv()
+ * console.log(env.mode)
+ * // Output: 'iam'  when DB_HOST/DB_NAME/DB_USER/AWS_REGION are set
+ * //         'local' when only DATABASE_URL is set
  */
 export const loadDatabaseEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
     const iam = iamModeSchema.safeParse(source);

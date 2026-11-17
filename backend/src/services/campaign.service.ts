@@ -37,12 +37,14 @@ export interface CreateCampaignCommand {
  *         written.
  *
  * @example
- * const row = await createDraftCampaign({
+ * const command = {
  *     name: 'Black Friday',
- *     templateId: TEMPLATE_ID,
- *     segmentId: SEGMENT_ID,
- *     userId: 'usr-agent-1',
- * });
+ *     templateId: '22222222-2222-4000-8000-000000000001',
+ *     segmentId: '11111111-1111-4000-8000-000000000001',
+ *     userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f',
+ * }
+ * const row = await createDraftCampaign(command)
+ * console.log(row.status) // Output: 'draft'
  */
 export const createDraftCampaign = async (command: CreateCampaignCommand): Promise<CampaignRow> => {
     return runInTransaction(async (tx) => {

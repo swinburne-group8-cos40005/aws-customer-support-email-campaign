@@ -36,10 +36,11 @@ export interface CreateCampaignInput {
  * @example
  * const row = await insertCampaignRow(tx, {
  *     name: 'Black Friday',
- *     templateId: TEMPLATE_ID,
- *     segmentId: SEGMENT_ID,
- *     createdBy: 'usr-agent-1',
- * });
+ *     templateId: '22222222-2222-4000-8000-000000000001',
+ *     segmentId: '11111111-1111-4000-8000-000000000001',
+ *     createdBy: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f',
+ * })
+ * console.log(row.status) // Output: 'draft' — always, on every insert
  */
 export const insertCampaignRow = async (
     tx: Queryable,
@@ -75,7 +76,18 @@ export const insertCampaignRow = async (
  * @returns Body fields exactly as the contract names them.
  *
  * @example
- * buildSuccessResponse(201, mapCampaignRowToResponse(row));
+ * const body = mapCampaignRowToResponse(row)
+ * console.log(body)
+ * // Output: {
+ * //   campaignId: '33333333-3333-4000-8000-000000000009',
+ * //   name: 'Black Friday',
+ * //   templateId: '22222222-2222-4000-8000-000000000001',
+ * //   segmentId: '11111111-1111-4000-8000-000000000001',
+ * //   status: 'draft',
+ * //   createdBy: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f',
+ * //   createdAt: '2026-11-11T03:00:00.000Z',
+ * //   updatedAt: '2026-11-11T03:00:00.000Z',
+ * // }
  */
 export const mapCampaignRowToResponse = (row: CampaignRow) => ({
     campaignId: row.campaign_id,
