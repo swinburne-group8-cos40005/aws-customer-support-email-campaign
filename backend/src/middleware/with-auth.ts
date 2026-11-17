@@ -21,6 +21,17 @@ export type InnerHandler = (
 ) => Promise<APIGatewayProxyResult>;
 
 /**
+ * A middleware-wrapped handler in the chain. `context` is optional because
+ * the chain entry (the Lambda runtime) has none yet: withAuth builds the
+ * real RequestContext from verified claims and ignores whatever the
+ * runtime passed as its second argument.
+ */
+export type HandlerFn = (
+    event: ApiEvent,
+    context?: RequestContext,
+) => Promise<APIGatewayProxyResult>;
+
+/**
  * Cognito `sub` claim injected by the API Gateway JWT authorizer.
  * The gateway already verified the token (infra/api.yaml); this only
  * unpacks the verified claim — no token parsing happens in Lambda.
@@ -41,8 +52,8 @@ const cognitoSub = (event: ApiEvent): string | null => {
  * safe even if a route is ever misconfigured in the template.
  */
 export const withAuth =
-    (inner: InnerHandler): InnerHandler =>
-    async (event, context) => {
+    (inner: InnerHandler): HandlerFn =>
+    async (event) => {
         const sub = cognitoSub(event);
         if (!sub) {
             throw new UnauthorizedError();

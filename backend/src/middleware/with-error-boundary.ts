@@ -1,7 +1,7 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
 import { ApiError } from '../utils/errors';
 import { fail } from '../utils/http';
-import type { InnerHandler } from './with-auth';
+import type { HandlerFn } from './with-auth';
 
 /**
  * Outermost guard: converts anything thrown inside the handler into the
@@ -11,7 +11,7 @@ import type { InnerHandler } from './with-auth';
  * leak into the response.
  */
 export const withErrorBoundary =
-    (inner: InnerHandler): InnerHandler =>
+    (inner: HandlerFn): HandlerFn =>
     async (event, context) => {
         try {
             return await inner(event, context);
