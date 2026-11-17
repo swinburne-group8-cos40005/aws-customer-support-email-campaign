@@ -97,6 +97,14 @@ describe('POST /v1/campaigns (handler composition)', () => {
         expect(parse(res).error.code).toBe('UNAUTHORIZED');
     });
 
+    test('401: minimal event without http context still logs and answers the envelope', async () => {
+        // Covers the request-logging fallbacks: a malformed or stripped
+        // event must not break the log line or the error boundary.
+        const res = await handler(event({ requestContext: {} }));
+        expect(res.statusCode).toBe(401);
+        expect(parse(res).error.code).toBe('UNAUTHORIZED');
+    });
+
     test('400: invalid JSON body', async () => {
         const res = await handler(event({ body: '{oops' }));
         expect(res.statusCode).toBe(400);
@@ -108,6 +116,15 @@ describe('POST /v1/campaigns (handler composition)', () => {
 
     test('400: body is not a JSON object', async () => {
         const res = await handler(event({ body: '[]' }));
+        expect(res.statusCode).toBe(400);
+        expect(parse(res).error).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'body' },
+        });
+    });
+
+    test('400: missing body entirely', async () => {
+        const res = await handler(event({ body: undefined }));
         expect(res.statusCode).toBe(400);
         expect(parse(res).error).toMatchObject({
             code: 'VALIDATION_ERROR',
