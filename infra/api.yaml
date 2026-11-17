@@ -32,7 +32,7 @@ Parameters:
   FrontendOrigin:
     Type: String
     Description: Deployed frontend origin allowed by CORS (no trailing slash)
-    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
+    AllowedPattern: '^https?://[A-Za-z0-9.-]+(:[0-9]+)?$'
 
 Conditions:
   AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
@@ -46,7 +46,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins: !If
           - AllowLocalhost
-          - [!Ref FrontendOrigin, "https://localhost:5713"]
+          - [!Ref FrontendOrigin, "https://localhost:5173"]
           - [!Ref FrontendOrigin]
         AllowMethods: [GET, POST, PUT, DELETE]
         AllowHeaders: [Authorization, Content-Type]
