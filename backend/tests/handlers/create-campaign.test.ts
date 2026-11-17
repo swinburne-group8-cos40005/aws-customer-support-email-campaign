@@ -32,7 +32,11 @@ const event = (overrides: Record<string, unknown> = {}): APIGatewayProxyEventV2W
             http: { method: 'POST', path: '/v1/campaigns' },
             authorizer: { jwt: { claims: { sub: 'usr-agent-1' } } },
         },
-        body: JSON.stringify({ name: 'Black Friday', templateId: TEMPLATE_ID, segmentId: SEGMENT_ID }),
+        body: JSON.stringify({
+            name: 'Black Friday',
+            templateId: TEMPLATE_ID,
+            segmentId: SEGMENT_ID,
+        }),
         ...overrides,
     }) as unknown as APIGatewayProxyEventV2WithJWTAuthorizer;
 
@@ -51,7 +55,8 @@ const parse = (res: { statusCode: number; body: string }) =>
     JSON.parse(res.body) as Record<string, any>;
 
 beforeEach(() => {
-    createDraftCampaignMock.mockReset().mockResolvedValue(row());
+    createDraftCampaignMock.mockReset();
+    createDraftCampaignMock.mockResolvedValue(row());
 });
 
 describe('POST /v1/campaigns (handler composition)', () => {

@@ -55,12 +55,20 @@ const command = () => ({
 
 beforeEach(() => {
     tx = { query: jest.fn() };
-    withTransactionMock.mockReset().mockImplementation(
-        async (fn: (t: Queryable) => unknown) => fn(tx as unknown as Queryable),
-    );
-    catalogExistsMock.mockReset().mockResolvedValue(true);
-    insertCampaignMock.mockReset().mockResolvedValue(row());
-    recordAuditMock.mockReset().mockResolvedValue(undefined);
+
+    withTransactionMock.mockReset();
+    withTransactionMock.mockImplementation(async (fn) => {
+        return fn(tx as unknown as Queryable);
+    });
+
+    catalogExistsMock.mockReset();
+    catalogExistsMock.mockResolvedValue(true);
+
+    insertCampaignMock.mockReset();
+    insertCampaignMock.mockResolvedValue(row());
+
+    recordAuditMock.mockReset();
+    recordAuditMock.mockResolvedValue(undefined);
 });
 
 describe('createDraftCampaign', () => {
