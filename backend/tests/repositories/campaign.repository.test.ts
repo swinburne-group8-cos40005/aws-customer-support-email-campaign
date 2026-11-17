@@ -1,11 +1,11 @@
 import type { Queryable } from '../../src/db/connection';
-import { insertCampaign, toCampaignResponse } from '../../src/repositories/campaign.repository';
+import { insertCampaign, toCampaignResponse, type CampaignRow } from '../../src/repositories/campaign.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 
 const asTx = (): Queryable => tx as unknown as Queryable;
 
-const campaignRow = () => ({
+const campaignRow = (): CampaignRow => ({
     campaign_id: '33333333-3333-4000-8000-000000000009',
     name: 'Black Friday',
     template_id: '22222222-2222-4000-8000-000000000001',
@@ -77,7 +77,7 @@ describe('toCampaignResponse', () => {
             name: 'Black Friday',
             templateId: '22222222-2222-4000-8000-000000000001',
             segmentId: '11111111-1111-4000-8000-000000000001',
-            status: 'draft' as const,
+            status: 'draft',
             createdBy: 'usr-agent-1',
             createdAt: '2026-11-11T03:00:00.000Z',
             updatedAt: '2026-11-11T03:00:00.000Z',
