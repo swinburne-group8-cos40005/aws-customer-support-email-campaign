@@ -1,9 +1,9 @@
+import type { APIGatewayProxyResult } from 'aws-lambda';
+import type { ApiEvent, AuthenticatedState } from '#http/auth';
 import { createCampaignSchema } from '#schemas/campaign.schema';
 import { createDraftCampaign, mapCampaignRowToResponse } from '#services/campaign.service';
 import { ValidationError } from '#utils/errors';
 import { buildSuccessResponse } from '#utils/http';
-import type { ApiEvent, AuthenticatedState } from '#http/auth';
-import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * POST /v1/campaigns (US01) — docs/api-contract.md §2.1.

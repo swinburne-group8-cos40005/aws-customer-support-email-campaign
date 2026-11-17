@@ -1,8 +1,10 @@
+import type { Env } from '#config/env';
+import type { PoolClient } from 'pg';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Signer } from '@aws-sdk/rds-signer';
-import { Pool, type PoolClient } from 'pg';
-import { loadDatabaseEnv, RDS_CA_BUNDLE_PATH, type Env } from '#config/env';
+import { Pool } from 'pg';
+import { loadDatabaseEnv, RDS_CA_BUNDLE_PATH } from '#config/env';
 
 export interface Row {
     [key: string]: unknown;
@@ -24,7 +26,7 @@ export interface Queryable {
 
 let pool: Pool | null = null;
 
-const createPool = (env: Env): Pool => {
+const _createPool = (env: Env): Pool => {
     if (env.mode === 'local') {
         // Local dev only (ADR-0006 D3): plain connection string to a
         // local Postgres; no IAM, no TLS requirement.
@@ -80,7 +82,7 @@ const createPool = (env: Env): Pool => {
  */
 export const getDatabasePool = (): Pool => {
     if (!pool) {
-        pool = createPool(loadDatabaseEnv());
+        pool = _createPool(loadDatabaseEnv());
     }
     return pool;
 };

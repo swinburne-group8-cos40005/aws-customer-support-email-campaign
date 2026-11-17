@@ -71,11 +71,11 @@ type JwtAuthorizerContext = {
  * @returns The verified Cognito subject, or null when absent.
  *
  * @example
- * const sub = extractCognitoSub(event)
+ * const sub = _extractCognitoSub(event)
  * console.log(sub) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
  *                  // (null when the authorizer context is stripped)
  */
-const extractCognitoSub = (event: ApiEvent): string | null => {
+const _extractCognitoSub = (event: ApiEvent): string | null => {
     const authorizer = (event.requestContext as JwtAuthorizerContext).authorizer;
     const claims = authorizer?.jwt?.claims;
     const sub = claims?.sub;
@@ -105,7 +105,7 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
  *                           // (throws UnauthorizedError -> 401 without claims)
  */
 export const resolveAuthenticatedUser = (event: ApiEvent): AuthenticatedState => {
-    const sub = extractCognitoSub(event);
+    const sub = _extractCognitoSub(event);
     if (!sub) {
         throw new UnauthorizedError();
     }

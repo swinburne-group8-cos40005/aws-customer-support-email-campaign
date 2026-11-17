@@ -1,7 +1,7 @@
+import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 import { handler } from '#handlers/create-campaign';
 import { createDraftCampaign } from '#services/campaign.service';
 import { NotFoundError } from '#utils/errors';
-import type { APIGatewayProxyEventV2WithJWTAuthorizer } from 'aws-lambda';
 
 jest.mock('#services/campaign.service', () => ({
     createDraftCampaign: jest.fn(),

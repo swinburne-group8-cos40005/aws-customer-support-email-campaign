@@ -1,6 +1,6 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
 
-const buildJsonResponse = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
+const _buildJsonResponse = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
     statusCode,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -21,7 +21,7 @@ const buildJsonResponse = (statusCode: number, payload: unknown): APIGatewayProx
  * console.log(response.body)       // Output: '{"campaignId":"33333333-3333-4000-8000-000000000009"}'
  */
 export const buildSuccessResponse = (statusCode: number, data: unknown): APIGatewayProxyResult =>
-    buildJsonResponse(statusCode, data);
+    _buildJsonResponse(statusCode, data);
 
 /**
  * Standard error envelope — docs/api-contract.md §1.3.
@@ -64,5 +64,5 @@ export const buildErrorResponse = (
         error.details = details;
     }
 
-    return buildJsonResponse(statusCode, { error });
+    return _buildJsonResponse(statusCode, { error });
 };

@@ -92,3 +92,7 @@ are tested at their own seams:
 Naming convention: functions use `verbNounNoun` camelCase
 (`loadDatabaseEnv`, `insertCampaignRow`, `mapCampaignRowToResponse`,
 `requireCognitoIdentity`) so a name states what the function does.
+Non-exported helpers get a `_` prefix (`_createPool`,
+`_extractCognitoSub`) so the export boundary is visible at a glance.
+Within a file, imports are ordered: default imports first, then type
+imports, then value imports.
