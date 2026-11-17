@@ -24,9 +24,14 @@ export type InnerHandler = (
  * Cognito `sub` claim injected by the API Gateway JWT authorizer.
  * The gateway already verified the token (infra/api.yaml); this only
  * unpacks the verified claim — no token parsing happens in Lambda.
+ * The optional chain is runtime safety: a misconfigured route that
+ * drops the authorizer must degrade to 401, not blow up as a 500.
  */
 const cognitoSub = (event: ApiEvent): string | null => {
-    const sub = event.requestContext.authorizer.jwt.claims.sub;
+    const claims = (
+        event.requestContext as { authorizer?: { jwt?: { claims?: Record<string, unknown> } } }
+    ).authorizer?.jwt?.claims;
+    const sub = claims?.sub;
     return typeof sub === 'string' ? sub : null;
 };
 
