@@ -25,7 +25,7 @@ export const buildSuccessResponse = (statusCode: number, data: unknown): APIGate
 
 /**
  * Standard error envelope — docs/api-contract.md §1.3.
- * Build the response body only; the error-boundary middleware decides
+ * Build the response body only; the error-mapping step decides
  * when to use it.
  *
  * @param statusCode - HTTP status to answer with.

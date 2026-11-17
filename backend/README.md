@@ -11,9 +11,9 @@ Request flow, outermost first:
 ```
 Lambda event (HTTP API v2 + JWT authorizer)
         │
-src/handlers/create-campaign.ts      Lambda entry: composes middleware + controller
+src/handlers/create-campaign.ts      Lambda entry: straight sequential pipeline
         │
-src/middleware/                      request logging -> error boundary -> auth
+src/http/                            auth -> controller -> error mapping -> logging
         │
 src/controllers/                     decode body, validate (zod), delegate, shape response
         │
@@ -36,8 +36,10 @@ Rules of thumb:
   (they answer questions like "does this exist", the service owns the 404).
 - Every audit insert rides the same transaction as the mutation it
   describes (docs/audit-log-strategy.md §5, FR9).
-- Error mapping happens exactly once, in the error-boundary middleware,
-  using the contract envelope from docs/api-contract.md §1.3.
+- Error mapping happens exactly once, in mapErrorToResponse, using the
+  contract envelope from docs/api-contract.md §1.3.
+- One handler is a straight sequential pipeline — auth, controller,
+  error mapping, logging as direct calls. No middleware framework.
 
 ## Database connectivity (two modes)
 

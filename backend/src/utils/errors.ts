@@ -1,6 +1,7 @@
 /**
  * Domain-level errors. They carry the contract's HTTP fields
- * (docs/api-contract.md §1.3) so middleware can map them one-to-one;
+ * (docs/api-contract.md §1.3) so the error-mapping step can map them
+ * one-to-one;
  * repositories and services throw them without knowing about HTTP.
  */
 export class ApiError extends Error {
@@ -34,7 +35,7 @@ export class NotFoundError extends ApiError {
     }
 }
 
-/** 401 — raised by the auth middleware when Cognito claims are missing. */
+/** 401 — raised by resolveAuthenticatedUser when Cognito claims are missing. */
 export class UnauthorizedError extends ApiError {
     constructor() {
         super(401, 'UNAUTHORIZED', 'A valid Cognito ID token is required.');

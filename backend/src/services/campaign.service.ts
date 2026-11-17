@@ -8,7 +8,7 @@ import {
 } from '../repositories/campaign.repository';
 import { NotFoundError } from '../utils/errors';
 
-/** What the controller is allowed to hand over — user identity comes from middleware, never from the body. */
+/** What the controller is allowed to hand over — user identity comes from the authenticated state, never from the body. */
 export interface CreateCampaignCommand {
     name: string;
     templateId: string;
@@ -28,7 +28,7 @@ export interface CreateCampaignCommand {
  *    machine (docs/email-state-machine.md), not to this endpoint.
  *
  * @param command - Validated body fields plus the caller's identity
- *                  resolved by the auth middleware.
+ *                  resolved by resolveAuthenticatedUser.
  *
  * @returns The stored campaign row.
  *

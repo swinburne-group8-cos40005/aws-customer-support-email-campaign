@@ -29,48 +29,15 @@ import { UnauthorizedError } from '../utils/errors';
 export type ApiEvent = APIGatewayProxyEventV2WithJWTAuthorizer;
 
 /**
- * Identity the auth middleware resolved from the verified JWT claims
- * and hands to controllers. Controllers must never read identity from
- * the request body — userId always comes from here.
+ * Identity the auth step resolved from the verified JWT claims, handed
+ * to controllers. Controllers must never read identity from the request
+ * body — userId always comes from here.
  *
  * @example
- * const context = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
- * console.log(context.userId) // Output: the caller's Cognito sub
+ * const state = { userId: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' }
+ * console.log(state.userId) // Output: the caller's Cognito sub
  */
-export interface RequestContext {
-    userId: string;
-}
-
-/**
- * A controller: receives the HTTP API v2 event plus the RequestContext
- * resolved by requireCognitoIdentity, and answers with a proxy result.
- *
- * @example
- * const controller: InnerHandler = async (event, context) => {
- *     console.log(context.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
- *     return buildSuccessResponse(201, { name: 'Black Friday' })
- * }
- */
-export type InnerHandler = (
-    event: ApiEvent,
-    context: RequestContext,
-) => Promise<APIGatewayProxyResult>;
-
-/**
- * A middleware-wrapped handler in the chain. `context` is optional
- * because the chain entry (the Lambda runtime) has none yet:
- * requireCognitoIdentity builds the real RequestContext from verified
- * claims and ignores whatever the runtime passed as its second argument.
- *
- * @example
- * // The Lambda runtime calls the composed chain with just the event:
- * const result = await composedHandler(event)
- * console.log(result.statusCode) // Output: 201 on success, 401 without claims
- */
-export type HandlerFn = (
-    event: ApiEvent,
-    context?: RequestContext,
-) => Promise<APIGatewayProxyResult>;
+export type AuthenticatedState = { userId: string };
 
 /**
  * Runtime shape accepted for requestContext.authorizer. Deliberately
@@ -82,7 +49,7 @@ export type HandlerFn = (
  * { jwt: { claims: { sub: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f' } } }
  *
  * // Misconfigured route — authorizer missing:
- * undefined // -> extractCognitoSub returns null -> 401
+ * undefined // -> resolveAuthenticatedUser answers 401
  */
 type JwtAuthorizerContext = {
     authorizer?: {
@@ -121,36 +88,27 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
 };
 
 /**
- * Middleware guarding every endpoint: refuses to run the inner handler
- * without a resolved identity. The gateway is the primary gate, but this
- * keeps the endpoint safe even if a route is ever misconfigured in the
- * template.
+ * Auth step of the request pipeline: resolves the caller's identity
+ * from the verified JWT claims. The gateway is the primary gate, but
+ * this keeps the endpoint safe even if a route is ever misconfigured
+ * in the template.
  *
- * @param inner - Controller to run once the identity is resolved.
+ * @param event - HTTP API v2 event carrying the verified JWT claims.
  *
- * @returns A chain handler that throws UnauthorizedError when no valid
- *          Cognito claims are present, otherwise calls the controller
- *          with the resolved RequestContext.
+ * @returns The authenticated state the controller receives.
  *
  * @throws UnauthorizedError When the event carries no Cognito `sub`.
  *
  * @example
- * const guarded = requireCognitoIdentity(controller)
- * const result = await guarded(event)
- * console.log(result.statusCode) // Output: 201 when claims exist,
- *                                //           401 envelope when they do not
+ * const state = resolveAuthenticatedUser(event)
+ * console.log(state.userId) // Output: '9f1c2a34-56b7-4c8d-9e0f-1a2b3c4d5e6f'
+ *                           // (throws UnauthorizedError -> 401 without claims)
  */
-export const requireCognitoIdentity = (inner: InnerHandler): HandlerFn => {
-    return async (event) => {
-        const sub = extractCognitoSub(event);
-        if (!sub) {
-            throw new UnauthorizedError();
-        }
+export const resolveAuthenticatedUser = (event: ApiEvent): AuthenticatedState => {
+    const sub = extractCognitoSub(event);
+    if (!sub) {
+        throw new UnauthorizedError();
+    }
 
-        const context: RequestContext = {
-            userId: sub,
-        };
-
-        return inner(event, context);
-    };
+    return { userId: sub };
 };
