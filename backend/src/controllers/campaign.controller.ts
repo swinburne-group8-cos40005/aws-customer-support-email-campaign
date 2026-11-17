@@ -4,7 +4,10 @@ import type { ApiEvent, AuthenticatedState } from '#http/auth';
 
 import { createCampaignSchema } from '#schemas/campaign.schema';
 
-import { createDraftCampaign, mapCampaignRowToResponse } from '#services/campaign.service';
+import {
+    createDraftCampaign,
+    mapCampaignRowToResponse
+} from '#services/campaign.service';
 
 import { ValidationError } from '#utils/errors';
 
