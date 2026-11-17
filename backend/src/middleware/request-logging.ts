@@ -13,9 +13,8 @@ import type { HandlerFn } from './auth';
  * @example
  * const logged = logRequestSummary(catchHandlerErrors(controller));
  */
-export const logRequestSummary =
-    (inner: HandlerFn): HandlerFn =>
-    async (event, context) => {
+export const logRequestSummary = (inner: HandlerFn): HandlerFn => {
+    return async (event, context) => {
         const started = Date.now();
         const result: APIGatewayProxyResult = await inner(event, context);
 
@@ -27,3 +26,4 @@ export const logRequestSummary =
 
         return result;
     };
+};

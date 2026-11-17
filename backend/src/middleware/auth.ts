@@ -88,12 +88,17 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
  * export const handler = composeMiddleware(createCampaignController);
  * // requireCognitoIdentity runs inside that composition.
  */
-export const requireCognitoIdentity =
-    (inner: InnerHandler): HandlerFn =>
-    async (event) => {
+export const requireCognitoIdentity = (inner: InnerHandler): HandlerFn => {
+    return async (event) => {
         const sub = extractCognitoSub(event);
         if (!sub) {
             throw new UnauthorizedError();
         }
-        return inner(event, { userId: sub });
+
+        const context: RequestContext = {
+            userId: sub,
+        };
+
+        return inner(event, context);
     };
+};

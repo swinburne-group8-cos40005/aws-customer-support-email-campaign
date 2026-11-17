@@ -18,16 +18,17 @@ import type { HandlerFn } from './auth';
  * @example
  * const guarded = catchHandlerErrors(requireCognitoIdentity(controller));
  */
-export const catchHandlerErrors =
-    (inner: HandlerFn): HandlerFn =>
-    async (event, context) => {
+export const catchHandlerErrors = (inner: HandlerFn): HandlerFn => {
+    return async (event, context) => {
         try {
             return await inner(event, context);
         } catch (err) {
             if (err instanceof ApiError) {
                 return buildErrorResponse(err.statusCode, err.code, err.message, err.details);
             }
+
             console.error('unhandled error', err);
             return buildErrorResponse(500, 'INTERNAL_ERROR', 'Unexpected server error.');
         }
     };
+};

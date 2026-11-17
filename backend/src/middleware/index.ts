@@ -20,9 +20,12 @@ export type { HandlerFn, InnerHandler, RequestContext } from './auth';
  * @example
  * export const handler = composeMiddleware(createCampaignController);
  */
-export const composeMiddleware =
-    (controller: InnerHandler): HandlerFn =>
-    (event) => {
-        const chain = logRequestSummary(catchHandlerErrors(requireCognitoIdentity(controller)));
-        return chain(event);
+export const composeMiddleware = (controller: InnerHandler): HandlerFn => {
+    return (event) => {
+        const authenticating = requireCognitoIdentity(controller);
+        const guardingErrors = catchHandlerErrors(authenticating);
+        const loggingRequests = logRequestSummary(guardingErrors);
+
+        return loggingRequests(event);
     };
+};
