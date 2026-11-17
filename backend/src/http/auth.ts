@@ -1,4 +1,7 @@
-import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResult } from 'aws-lambda';
+import type {
+    APIGatewayProxyEventV2WithJWTAuthorizer,
+    APIGatewayProxyResult,
+} from 'aws-lambda';
 
 import { UnauthorizedError } from '#utils/errors';
 

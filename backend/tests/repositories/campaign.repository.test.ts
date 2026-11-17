@@ -1,5 +1,6 @@
-import type { CampaignRow } from '#repositories/campaign.repository';
 import type { Queryable } from '#db/connection';
+
+import type { CampaignRow } from '#repositories/campaign.repository';
 
 import { insertCampaignRow, mapCampaignRowToResponse } from '#repositories/campaign.repository';
 

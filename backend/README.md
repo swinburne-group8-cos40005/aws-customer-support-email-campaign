@@ -95,5 +95,13 @@ Naming convention: functions use `verbNounNoun` camelCase
 Non-exported helpers get a `_` prefix (`_createPool`,
 `_extractCognitoSub`) so the export boundary is visible at a glance.
 Within a file, imports are ordered default first, then type imports,
-then value imports, with a blank line between each group and three
-blank lines before the first declaration.
+then value imports. They are grouped by domain — node builtins,
+external packages, then one block per internal `#` alias — with a blank
+line between each group and three blank lines before the first
+declaration. An import with many names in `{}` breaks one name per
+line (rule of thumb: more than two names, or a line over ~90
+characters):
+import type {
+    APIGatewayProxyEventV2WithJWTAuthorizer,
+    APIGatewayProxyResult,
+} from 'aws-lambda';
