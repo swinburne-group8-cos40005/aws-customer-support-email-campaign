@@ -13,7 +13,7 @@ Lambda event (HTTP API v2 + JWT authorizer)
         │
 src/handlers/create-campaign.ts      Lambda entry: composes middleware + controller
         │
-src/middleware/                      request logging -> error boundary -> auth
+src/middleware/                      Express-style chain: (event, state, next)
         │
 src/controllers/                     decode body, validate (zod), delegate, shape response
         │
@@ -38,6 +38,9 @@ Rules of thumb:
   describes (docs/audit-log-strategy.md §5, FR9).
 - Error mapping happens exactly once, in the error-boundary middleware,
   using the contract envelope from docs/api-contract.md §1.3.
+- Middleware are composed Express-style, without Express: each stage is
+  `async (event, state, next) => ...` and the chain is a plain array in
+  the handler file (outermost first), passed to `composeMiddleware`.
 
 ## Database connectivity (two modes)
 
@@ -79,7 +82,8 @@ are tested at their own seams:
 1. Repository functions for the new SQL.
 2. Service function owning rules + transaction + audit.
 3. zod schema in `src/schemas/`.
-4. Controller + `composeMiddleware(controller)` handler file.
+4. Controller + handler file declaring the middleware array
+   (`composeMiddleware(middleware, controller)`).
 5. Route entry in `infra/api.yaml` pointing `Handler` at the new file.
 
 Naming convention: functions use `verbNounNoun` camelCase
