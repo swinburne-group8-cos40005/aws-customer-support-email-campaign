@@ -1,5 +1,4 @@
-import { APIGatewayProxyResult } from 'aws-lambda';
-import { ApiError } from './errors';
+import type { APIGatewayProxyResult } from 'aws-lambda';
 
 const json = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
     statusCode,
@@ -10,7 +9,10 @@ const json = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
 export const ok = (statusCode: number, data: unknown): APIGatewayProxyResult =>
     json(statusCode, data);
 
-/** Standard error envelope — docs/api-contract.md §1.3. */
+/**
+ * Standard error envelope — docs/api-contract.md §1.3.
+ * Build the response body only; middleware decides when to use it.
+ */
 export const fail = (
     statusCode: number,
     code: string,
@@ -18,11 +20,3 @@ export const fail = (
     details?: Record<string, unknown>,
 ): APIGatewayProxyResult =>
     json(statusCode, { error: { code, message, ...(details ? { details } : {}) } });
-
-export const toErrorResponse = (err: unknown): APIGatewayProxyResult => {
-    if (err instanceof ApiError) {
-        return fail(err.statusCode, err.code, err.message, err.details);
-    }
-    console.error('unhandled error', err);
-    return fail(500, 'INTERNAL_ERROR', 'Unexpected server error.');
-};
