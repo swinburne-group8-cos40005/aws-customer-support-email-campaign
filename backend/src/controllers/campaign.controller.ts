@@ -22,8 +22,11 @@ export const createCampaignController: InnerHandler = async (event, context) => 
     const parsed = createCampaignSchema.safeParse(raw);
     if (!parsed.success) {
         const issue = parsed.error.issues[0];
-        // With a flat object schema the path is always [field]; the guard
-        // keeps the mapping honest if the schema ever nests.
+        // Schema is a flat object, so the path is always [field]; the
+        // guard keeps the mapping honest if the schema ever nests.
+        if (!issue) {
+            throw new ValidationError('body', 'Invalid request body.');
+        }
         const field = issue.path.length > 0 ? String(issue.path[0]) : 'body';
         throw new ValidationError(field, issue.message);
     }

@@ -1,5 +1,13 @@
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResult } from 'aws-lambda';
 import { UnauthorizedError } from '../utils/errors';
+
+/**
+ * The API is an HTTP API (infra/api.yaml, PayloadFormatVersion 2.0) with
+ * a JWT authorizer, so Lambda receives this exact event shape: claims
+ * live under requestContext.authorizer.jwt.claims — not the v1
+ * authorizer.claims path used by REST API events.
+ */
+export type ApiEvent = APIGatewayProxyEventV2WithJWTAuthorizer;
 
 /** Identity resolved by the JWT authorizer and handed to controllers. */
 export interface RequestContext {
@@ -8,7 +16,7 @@ export interface RequestContext {
 
 /** Controllers receive the event plus the resolved request context. */
 export type InnerHandler = (
-    event: APIGatewayProxyEvent,
+    event: ApiEvent,
     context: RequestContext,
 ) => Promise<APIGatewayProxyResult>;
 
@@ -17,13 +25,9 @@ export type InnerHandler = (
  * The gateway already verified the token (infra/api.yaml); this only
  * unpacks the verified claim — no token parsing happens in Lambda.
  */
-const cognitoSub = (event: APIGatewayProxyEvent): string | null => {
-    const authorizer = (
-        event.requestContext as unknown as {
-            authorizer?: { claims?: Record<string, string> };
-        }
-    ).authorizer;
-    return authorizer?.claims?.sub ?? null;
+const cognitoSub = (event: ApiEvent): string | null => {
+    const sub = event.requestContext.authorizer.jwt.claims.sub;
+    return typeof sub === 'string' ? sub : null;
 };
 
 /**

@@ -35,7 +35,15 @@ export const insertCampaign = async (
                    created_by, created_at, updated_at`,
         [input.name, input.templateId, input.segmentId, input.createdBy],
     );
-    return result.rows[0] as CampaignRow;
+    // RETURNING with VALUES guarantees exactly one row; an empty result
+    // is a driver/PG defect and should fail loudly, not shape-shift.
+    // The cast asserts the shape the RETURNING clause promises — pg
+    // returns untyped rows at runtime.
+    const row = result.rows[0];
+    if (!row) {
+        throw new Error('campaign INSERT RETURNING produced no row');
+    }
+    return row as unknown as CampaignRow;
 };
 
 /** Maps the snake_case storage row onto the camelCase contract body (§2.1). */
