@@ -94,5 +94,6 @@ Naming convention: functions use `verbNounNoun` camelCase
 `requireCognitoIdentity`) so a name states what the function does.
 Non-exported helpers get a `_` prefix (`_createPool`,
 `_extractCognitoSub`) so the export boundary is visible at a glance.
-Within a file, imports are ordered: default imports first, then type
-imports, then value imports.
+Within a file, imports are ordered default first, then type imports,
+then value imports, with a blank line between each group and three
+blank lines before the first declaration.

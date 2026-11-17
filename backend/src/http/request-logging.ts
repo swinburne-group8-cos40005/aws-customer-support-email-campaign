@@ -1,6 +1,9 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
 import type { ApiEvent } from '#http/auth';
 
+
+
+
 /**
  * Logging step of the request pipeline: one line per invocation with
  * method, path, status and duration. Kept minimal on purpose — richer

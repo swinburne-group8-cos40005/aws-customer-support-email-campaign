@@ -1,5 +1,9 @@
 import type { APIGatewayProxyEventV2WithJWTAuthorizer, APIGatewayProxyResult } from 'aws-lambda';
+
 import { UnauthorizedError } from '#utils/errors';
+
+
+
 
 /**
  * The event the Lambda receives — HTTP API (infra/api.yaml,

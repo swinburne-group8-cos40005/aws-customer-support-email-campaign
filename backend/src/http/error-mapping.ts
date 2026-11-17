@@ -1,6 +1,10 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
+
 import { ApiError } from '#utils/errors';
 import { buildErrorResponse } from '#utils/http';
+
+
+
 
 /**
  * Error-mapping step of the request pipeline: converts anything the
