@@ -47,13 +47,16 @@ export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
     if (iam.success) {
         return { mode: 'iam', ...iam.data };
     }
+
     const local = localModeSchema.safeParse(source);
     if (local.success) {
         return { mode: 'local', databaseUrl: local.data.DATABASE_URL };
     }
+
     const expected = [
         'iam mode: DB_HOST, DB_NAME, DB_USER (+ optional DB_PORT) and AWS_REGION',
         'local mode: DATABASE_URL',
     ].join(' — or — ');
+
     throw new Error(`Database environment is not configured. Expected ${expected}`);
 };

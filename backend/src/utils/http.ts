@@ -18,5 +18,15 @@ export const fail = (
     code: string,
     message: string,
     details?: Record<string, unknown>,
-): APIGatewayProxyResult =>
-    json(statusCode, { error: { code, message, ...(details ? { details } : {}) } });
+): APIGatewayProxyResult => {
+    const error: Record<string, unknown> = {
+        code,
+        message,
+    };
+
+    if (details) {
+        error.details = details;
+    }
+
+    return json(statusCode, { error });
+};

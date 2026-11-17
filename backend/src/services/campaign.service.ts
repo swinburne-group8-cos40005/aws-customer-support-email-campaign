@@ -29,10 +29,13 @@ export interface CreateCampaignCommand {
  */
 export const createDraftCampaign = async (command: CreateCampaignCommand): Promise<CampaignRow> => {
     return withTransaction(async (tx) => {
-        if (!(await catalogExists(tx, 'templates', command.templateId))) {
+        const templateExists = await catalogExists(tx, 'templates', command.templateId);
+        if (!templateExists) {
             throw new NotFoundError('template', command.templateId);
         }
-        if (!(await catalogExists(tx, 'segments', command.segmentId))) {
+
+        const segmentExists = await catalogExists(tx, 'segments', command.segmentId);
+        if (!segmentExists) {
             throw new NotFoundError('segment', command.segmentId);
         }
 

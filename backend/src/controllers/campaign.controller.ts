@@ -23,11 +23,19 @@ export const createCampaignController: InnerHandler = async (event, context) => 
     if (!parsed.success) {
         // zod guarantees at least one issue whenever parsing fails.
         const issue = parsed.error.issues[0]!;
-        const field = issue.path.length > 0 ? String(issue.path[0]) : 'body';
+        const field = issue.path.length > 0
+            ? String(issue.path[0])
+            : 'body';
         throw new ValidationError(field, issue.message);
     }
 
-    const row = await createDraftCampaign({ ...parsed.data, userId: context.userId });
+    const command = {
+        ...parsed.data,
+        userId: context.userId,
+    };
+
+    const row = await createDraftCampaign(command);
+
     // Mapping reuse: the repository owns the snake_case -> camelCase shape
     // (§2.1); the controller must not duplicate it.
     return ok(201, toCampaignResponse(row));

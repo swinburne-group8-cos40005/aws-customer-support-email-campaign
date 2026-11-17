@@ -19,6 +19,12 @@ export const recordAudit = async (tx: Queryable, entry: AuditEntry): Promise<voi
     await tx.query(
         `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, changes)
          VALUES ($1, $2, $3, $4, $5::jsonb)`,
-        [entry.userId, entry.action, entry.entityType, entry.entityId, JSON.stringify(entry.changes)],
+        [
+            entry.userId,
+            entry.action,
+            entry.entityType,
+            entry.entityId,
+            JSON.stringify(entry.changes),
+        ],
     );
 };

@@ -11,10 +11,12 @@ export const withRequestLogging =
     async (event, context) => {
         const started = Date.now();
         const result: APIGatewayProxyResult = await inner(event, context);
-        console.log(
-            `${event.requestContext.http?.method ?? 'UNKNOWN'} ${
-                event.requestContext.http?.path ?? ''
-            } -> ${result.statusCode} (${Date.now() - started}ms)`,
-        );
+
+        const method = event.requestContext.http?.method ?? 'UNKNOWN';
+        const path = event.requestContext.http?.path ?? '';
+        const durationMs = Date.now() - started;
+
+        console.log(`${method} ${path} -> ${result.statusCode} (${durationMs}ms)`);
+
         return result;
     };

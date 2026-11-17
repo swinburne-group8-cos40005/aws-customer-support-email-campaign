@@ -32,18 +32,33 @@ export type HandlerFn = (
 ) => Promise<APIGatewayProxyResult>;
 
 /**
+ * Runtime shape we accept for the authorizer context. Deliberately looser
+ * than the generated event type so a stripped/misconfigured authorizer
+ * degrades to `null` instead of throwing mid-request.
+ */
+type JwtAuthorizerContext = {
+    authorizer?: {
+        jwt?: {
+            claims?: Record<string, unknown>;
+        };
+    };
+};
+
+/**
  * Cognito `sub` claim injected by the API Gateway JWT authorizer.
  * The gateway already verified the token (infra/api.yaml); this only
  * unpacks the verified claim — no token parsing happens in Lambda.
- * The optional chain is runtime safety: a misconfigured route that
- * drops the authorizer must degrade to 401, not blow up as a 500.
  */
 const cognitoSub = (event: ApiEvent): string | null => {
-    const claims = (
-        event.requestContext as { authorizer?: { jwt?: { claims?: Record<string, unknown> } } }
-    ).authorizer?.jwt?.claims;
+    const authorizer = (event.requestContext as JwtAuthorizerContext).authorizer;
+    const claims = authorizer?.jwt?.claims;
     const sub = claims?.sub;
-    return typeof sub === 'string' ? sub : null;
+
+    if (typeof sub !== 'string') {
+        return null;
+    }
+
+    return sub;
 };
 
 /**

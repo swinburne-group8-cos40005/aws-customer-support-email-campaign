@@ -17,5 +17,7 @@ export type { HandlerFn, InnerHandler, RequestContext } from './with-auth';
  */
 export const composeMiddleware =
     (controller: InnerHandler): HandlerFn =>
-    (event) =>
-        withRequestLogging(withErrorBoundary(withAuth(controller)))(event);
+    (event) => {
+        const chain = withRequestLogging(withErrorBoundary(withAuth(controller)));
+        return chain(event);
+    };

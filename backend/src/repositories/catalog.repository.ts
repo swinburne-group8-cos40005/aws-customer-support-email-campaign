@@ -24,6 +24,12 @@ export const catalogExists = async (
     id: string,
 ): Promise<boolean> => {
     const column = COLUMN_BY_TABLE[table];
-    const result = await tx.query(`SELECT 1 AS found FROM ${table} WHERE ${column} = $1`, [id]);
+
+    const sql = `SELECT 1 AS found
+                 FROM ${table}
+                 WHERE ${column} = $1`;
+
+    const result = await tx.query(sql, [id]);
+
     return result.rows.length > 0;
 };
