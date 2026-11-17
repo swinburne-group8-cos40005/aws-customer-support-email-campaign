@@ -11,9 +11,6 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-  ArtifactBucket:
-    Type: String
-    Description: S3 bucket holding the packaged backend Lambda bundle
   ArtifactKey:
     Type: String
     Description: S3 key of the packaged backend Lambda bundle
@@ -102,7 +99,10 @@ Resources:
       Architectures: [arm64]
       Role: !GetAtt ApiLambdaRole.Arn
       Code:
-        S3Bucket: !Ref ArtifactBucket
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
         S3Key: !Ref ArtifactKey
       Environment:
         Variables:
