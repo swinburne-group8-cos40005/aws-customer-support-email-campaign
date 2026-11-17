@@ -1,5 +1,5 @@
 import { createCampaignSchema } from '../schemas/campaign.schema';
-import { createDraftCampaign } from '../services/campaign.service';
+import { createDraftCampaign, toCampaignResponse } from '../services/campaign.service';
 import { ValidationError } from '../utils/errors';
 import { ok } from '../utils/http';
 import type { InnerHandler } from '../middleware';
@@ -32,14 +32,7 @@ export const createCampaignController: InnerHandler = async (event, context) => 
     }
 
     const row = await createDraftCampaign({ ...parsed.data, userId: context.userId });
-    return ok(201, {
-        campaignId: row.campaign_id,
-        name: row.name,
-        templateId: row.template_id,
-        segmentId: row.segment_id,
-        status: row.status,
-        createdBy: row.created_by,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-    });
+    // Mapping reuse: the repository owns the snake_case -> camelCase shape
+    // (§2.1); the controller must not duplicate it.
+    return ok(201, toCampaignResponse(row));
 };
