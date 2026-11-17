@@ -105,7 +105,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub csep-create-campaign-${EnvironmentName}
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: !Ref Handler
       MemorySize: 256
       Timeout: 10
