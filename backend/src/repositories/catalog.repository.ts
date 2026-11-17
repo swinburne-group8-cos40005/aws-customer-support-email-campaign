@@ -18,7 +18,7 @@ const COLUMN_BY_TABLE: Record<CatalogTable, 'template_id' | 'segment_id'> = {
  * FK rows are checked at write time so the campaign and the missing
  * reference cannot disagree between check and insert.
  */
-export const catalogExists = async (
+export const checkCatalogExists = async (
     tx: Queryable,
     table: CatalogTable,
     id: string,

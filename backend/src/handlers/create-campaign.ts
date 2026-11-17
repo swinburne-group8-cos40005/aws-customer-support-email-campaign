@@ -1,4 +1,4 @@
-import { createCampaignController } from '../controllers/campaign.controller';
+import { handleCreateCampaignRequest } from '../controllers/campaign.controller';
 import { composeMiddleware } from '../middleware';
 
 /**
@@ -7,4 +7,4 @@ import { composeMiddleware } from '../middleware';
  * composition plus the controller — so the remaining eight endpoints
  * inherit the exact same wiring pattern.
  */
-export const handler = composeMiddleware(createCampaignController);
+export const handler = composeMiddleware(handleCreateCampaignRequest);

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Signer } from '@aws-sdk/rds-signer';
 import { Pool, type PoolClient } from 'pg';
-import { loadEnv, RDS_CA_BUNDLE_PATH, type Env } from '../config/env';
+import { loadDatabaseEnv, RDS_CA_BUNDLE_PATH, type Env } from '../config/env';
 
 export interface Row {
     [key: string]: unknown;
@@ -64,14 +64,14 @@ const createPool = (env: Env): Pool => {
 };
 
 /** Lazily created; reused across warm Lambda invocations. */
-export const getPool = (): Pool => {
+export const getDatabasePool = (): Pool => {
     if (!pool) {
-        pool = createPool(loadEnv());
+        pool = createPool(loadDatabaseEnv());
     }
     return pool;
 };
 
-export const closePool = async (): Promise<void> => {
+export const closeDatabasePool = async (): Promise<void> => {
     if (pool) {
         await pool.end();
         pool = null;
@@ -83,8 +83,8 @@ export const closePool = async (): Promise<void> => {
  * transaction as the mutation they describe (docs/audit-log-strategy.md §5):
  * if the mutation fails, the audit row rolls back with it.
  */
-export async function withTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
-    const client: PoolClient = await getPool().connect();
+export async function runInTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
+    const client: PoolClient = await getDatabasePool().connect();
     try {
         await client.query('BEGIN');
         const result = await fn(client as unknown as Queryable);

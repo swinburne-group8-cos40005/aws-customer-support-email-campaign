@@ -1,19 +1,19 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
 
-const json = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
+const buildJsonResponse = (statusCode: number, payload: unknown): APIGatewayProxyResult => ({
     statusCode,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
 });
 
-export const ok = (statusCode: number, data: unknown): APIGatewayProxyResult =>
-    json(statusCode, data);
+export const buildSuccessResponse = (statusCode: number, data: unknown): APIGatewayProxyResult =>
+    buildJsonResponse(statusCode, data);
 
 /**
  * Standard error envelope — docs/api-contract.md §1.3.
  * Build the response body only; middleware decides when to use it.
  */
-export const fail = (
+export const buildErrorResponse = (
     statusCode: number,
     code: string,
     message: string,
@@ -28,5 +28,5 @@ export const fail = (
         error.details = details;
     }
 
-    return json(statusCode, { error });
+    return buildJsonResponse(statusCode, { error });
 };

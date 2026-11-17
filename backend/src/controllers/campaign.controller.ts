@@ -1,7 +1,7 @@
 import { createCampaignSchema } from '../schemas/campaign.schema';
-import { createDraftCampaign, toCampaignResponse } from '../services/campaign.service';
+import { createDraftCampaign, mapCampaignRowToResponse } from '../services/campaign.service';
 import { ValidationError } from '../utils/errors';
-import { ok } from '../utils/http';
+import { buildSuccessResponse } from '../utils/http';
 import type { InnerHandler } from '../middleware';
 
 /**
@@ -11,7 +11,7 @@ import type { InnerHandler } from '../middleware';
  * zod schema, delegate to the service, shape the 201 response.
  * Business rules live in the service; SQL lives in repositories.
  */
-export const createCampaignController: InnerHandler = async (event, context) => {
+export const handleCreateCampaignRequest: InnerHandler = async (event, context) => {
     let raw: unknown;
     try {
         raw = JSON.parse(event.body ?? '');
@@ -38,5 +38,5 @@ export const createCampaignController: InnerHandler = async (event, context) => 
 
     // Mapping reuse: the repository owns the snake_case -> camelCase shape
     // (§2.1); the controller must not duplicate it.
-    return ok(201, toCampaignResponse(row));
+    return buildSuccessResponse(201, mapCampaignRowToResponse(row));
 };

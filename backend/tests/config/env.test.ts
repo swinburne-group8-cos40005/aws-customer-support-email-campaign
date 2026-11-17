@@ -1,8 +1,8 @@
-import { loadEnv } from '../../src/config/env';
+import { loadDatabaseEnv } from '../../src/config/env';
 
-describe('loadEnv', () => {
+describe('loadDatabaseEnv', () => {
     test('iam mode: DB coordinates without DATABASE_URL, port defaults to 5432', () => {
-        const env = loadEnv({
+        const env = loadDatabaseEnv({
             DB_HOST: 'csep-data-proxy.aws.com',
             DB_NAME: 'csep',
             DB_USER: 'csep_app',
@@ -20,7 +20,7 @@ describe('loadEnv', () => {
     });
 
     test('iam mode: explicit DB_PORT is coerced to a number', () => {
-        const env = loadEnv({
+        const env = loadDatabaseEnv({
             DB_HOST: 'h',
             DB_PORT: '5433',
             DB_NAME: 'csep',
@@ -31,14 +31,14 @@ describe('loadEnv', () => {
     });
 
     test('local mode: DATABASE_URL only', () => {
-        expect(loadEnv({ DATABASE_URL: 'postgres://localhost:5432/csep' })).toEqual({
+        expect(loadDatabaseEnv({ DATABASE_URL: 'postgres://localhost:5432/csep' })).toEqual({
             mode: 'local',
             databaseUrl: 'postgres://localhost:5432/csep',
         });
     });
 
     test('throws a configuration error when neither mode is satisfied', () => {
-        expect(() => loadEnv({})).toThrow('Database environment is not configured');
+        expect(() => loadDatabaseEnv({})).toThrow('Database environment is not configured');
     });
 
     test('falls back to process.env when called without arguments (Lambda runtime)', () => {
@@ -48,7 +48,7 @@ describe('loadEnv', () => {
         process.env.AWS_REGION = 'ap-southeast-2';
 
         try {
-            expect(loadEnv()).toMatchObject({ mode: 'iam', DB_HOST: 'csep-data-proxy.aws.com' });
+            expect(loadDatabaseEnv()).toMatchObject({ mode: 'iam', DB_HOST: 'csep-data-proxy.aws.com' });
         } finally {
             for (const key of ['DB_HOST', 'DB_NAME', 'DB_USER', 'AWS_REGION']) {
                 delete process.env[key];

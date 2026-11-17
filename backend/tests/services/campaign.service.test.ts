@@ -1,33 +1,33 @@
-import { withTransaction } from '../../src/db/connection';
+import { runInTransaction } from '../../src/db/connection';
 import { createDraftCampaign } from '../../src/services/campaign.service';
-import { catalogExists } from '../../src/repositories/catalog.repository';
-import { insertCampaign } from '../../src/repositories/campaign.repository';
-import { recordAudit } from '../../src/repositories/audit-log.repository';
+import { checkCatalogExists } from '../../src/repositories/catalog.repository';
+import { insertCampaignRow } from '../../src/repositories/campaign.repository';
+import { insertAuditRecord } from '../../src/repositories/audit-log.repository';
 import type { Queryable } from '../../src/db/connection';
 import type { CampaignRow } from '../../src/repositories/campaign.repository';
 
 jest.mock('../../src/db/connection', () => ({
-    withTransaction: jest.fn(),
+    runInTransaction: jest.fn(),
 }));
 
 jest.mock('../../src/repositories/catalog.repository', () => ({
-    catalogExists: jest.fn(),
+    checkCatalogExists: jest.fn(),
 }));
 
 jest.mock('../../src/repositories/campaign.repository', () => ({
-    insertCampaign: jest.fn(),
-    toCampaignResponse: jest.requireActual('../../src/repositories/campaign.repository')
-        .toCampaignResponse,
+    insertCampaignRow: jest.fn(),
+    mapCampaignRowToResponse: jest.requireActual('../../src/repositories/campaign.repository')
+        .mapCampaignRowToResponse,
 }));
 
 jest.mock('../../src/repositories/audit-log.repository', () => ({
-    recordAudit: jest.fn(),
+    insertAuditRecord: jest.fn(),
 }));
 
-const withTransactionMock = withTransaction as jest.Mock;
-const catalogExistsMock = catalogExists as jest.Mock;
-const insertCampaignMock = insertCampaign as jest.Mock;
-const recordAuditMock = recordAudit as jest.Mock;
+const runInTransactionMock = runInTransaction as jest.Mock;
+const checkCatalogExistsMock = checkCatalogExists as jest.Mock;
+const insertCampaignRowMock = insertCampaignRow as jest.Mock;
+const insertAuditRecordMock = insertAuditRecord as jest.Mock;
 
 const TEMPLATE_ID = '22222222-2222-4000-8000-000000000001';
 const SEGMENT_ID = '11111111-1111-4000-8000-000000000001';
@@ -56,28 +56,28 @@ const command = () => ({
 beforeEach(() => {
     tx = { query: jest.fn() };
 
-    withTransactionMock.mockReset();
-    withTransactionMock.mockImplementation(async (fn) => {
+    runInTransactionMock.mockReset();
+    runInTransactionMock.mockImplementation(async (fn) => {
         return fn(tx as unknown as Queryable);
     });
 
-    catalogExistsMock.mockReset();
-    catalogExistsMock.mockResolvedValue(true);
+    checkCatalogExistsMock.mockReset();
+    checkCatalogExistsMock.mockResolvedValue(true);
 
-    insertCampaignMock.mockReset();
-    insertCampaignMock.mockResolvedValue(row());
+    insertCampaignRowMock.mockReset();
+    insertCampaignRowMock.mockResolvedValue(row());
 
-    recordAuditMock.mockReset();
-    recordAuditMock.mockResolvedValue(undefined);
+    insertAuditRecordMock.mockReset();
+    insertAuditRecordMock.mockResolvedValue(undefined);
 });
 
 describe('createDraftCampaign', () => {
     test('checks template and segment inside the same transaction, then inserts a draft', async () => {
         const result = await createDraftCampaign(command());
 
-        expect(catalogExistsMock).toHaveBeenNthCalledWith(1, tx, 'templates', TEMPLATE_ID);
-        expect(catalogExistsMock).toHaveBeenNthCalledWith(2, tx, 'segments', SEGMENT_ID);
-        expect(insertCampaignMock).toHaveBeenCalledWith(tx, {
+        expect(checkCatalogExistsMock).toHaveBeenNthCalledWith(1, tx, 'templates', TEMPLATE_ID);
+        expect(checkCatalogExistsMock).toHaveBeenNthCalledWith(2, tx, 'segments', SEGMENT_ID);
+        expect(insertCampaignRowMock).toHaveBeenCalledWith(tx, {
             name: 'Black Friday',
             templateId: TEMPLATE_ID,
             segmentId: SEGMENT_ID,
@@ -89,8 +89,8 @@ describe('createDraftCampaign', () => {
     test('audit row rides the same transaction: action=create + before/after snapshot', async () => {
         await createDraftCampaign(command());
 
-        expect(recordAuditMock).toHaveBeenCalledTimes(1);
-        const [auditTx, entry] = recordAuditMock.mock.calls[0] as [
+        expect(insertAuditRecordMock).toHaveBeenCalledTimes(1);
+        const [auditTx, entry] = insertAuditRecordMock.mock.calls[0] as [
             Queryable,
             { changes: Record<string, unknown> },
         ];
@@ -107,7 +107,7 @@ describe('createDraftCampaign', () => {
     });
 
     test('404 when the template does not exist — campaign is never inserted', async () => {
-        catalogExistsMock.mockImplementation(
+        checkCatalogExistsMock.mockImplementation(
             async (_tx: Queryable, table: string) => table !== 'templates',
         );
 
@@ -116,12 +116,12 @@ describe('createDraftCampaign', () => {
             code: 'RESOURCE_NOT_FOUND',
             message: expect.stringContaining('template'),
         });
-        expect(insertCampaignMock).not.toHaveBeenCalled();
-        expect(recordAuditMock).not.toHaveBeenCalled();
+        expect(insertCampaignRowMock).not.toHaveBeenCalled();
+        expect(insertAuditRecordMock).not.toHaveBeenCalled();
     });
 
     test('404 when the segment does not exist — campaign is never inserted', async () => {
-        catalogExistsMock.mockImplementation(
+        checkCatalogExistsMock.mockImplementation(
             async (_tx: Queryable, table: string) => table !== 'segments',
         );
 
@@ -130,7 +130,7 @@ describe('createDraftCampaign', () => {
             code: 'RESOURCE_NOT_FOUND',
             message: expect.stringContaining('segment'),
         });
-        expect(insertCampaignMock).not.toHaveBeenCalled();
-        expect(recordAuditMock).not.toHaveBeenCalled();
+        expect(insertCampaignRowMock).not.toHaveBeenCalled();
+        expect(insertAuditRecordMock).not.toHaveBeenCalled();
     });
 });

@@ -15,7 +15,7 @@ export interface AuditEntry {
  * (docs/audit-log-strategy.md §5) so the pair commits or rolls back
  * together — FR9 guarantees an auditable history with no blind spots.
  */
-export const recordAudit = async (tx: Queryable, entry: AuditEntry): Promise<void> => {
+export const insertAuditRecord = async (tx: Queryable, entry: AuditEntry): Promise<void> => {
     await tx.query(
         `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, changes)
          VALUES ($1, $2, $3, $4, $5::jsonb)`,

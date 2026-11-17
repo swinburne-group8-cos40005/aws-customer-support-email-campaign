@@ -1,8 +1,8 @@
-import { withErrorBoundary } from './with-error-boundary';
-import { withRequestLogging } from './with-request-logging';
-import { withAuth, type HandlerFn, type InnerHandler } from './with-auth';
+import { catchHandlerErrors } from './error-boundary';
+import { logRequestSummary } from './request-logging';
+import { requireCognitoIdentity, type HandlerFn, type InnerHandler } from './auth';
 
-export type { HandlerFn, InnerHandler, RequestContext } from './with-auth';
+export type { HandlerFn, InnerHandler, RequestContext } from './auth';
 
 /**
  * Standard middleware chain, outermost first:
@@ -18,6 +18,6 @@ export type { HandlerFn, InnerHandler, RequestContext } from './with-auth';
 export const composeMiddleware =
     (controller: InnerHandler): HandlerFn =>
     (event) => {
-        const chain = withRequestLogging(withErrorBoundary(withAuth(controller)));
+        const chain = logRequestSummary(catchHandlerErrors(requireCognitoIdentity(controller)));
         return chain(event);
     };

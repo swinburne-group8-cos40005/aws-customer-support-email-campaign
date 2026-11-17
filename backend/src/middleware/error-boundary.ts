@@ -1,7 +1,7 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
 import { ApiError } from '../utils/errors';
-import { fail } from '../utils/http';
-import type { HandlerFn } from './with-auth';
+import { buildErrorResponse } from '../utils/http';
+import type { HandlerFn } from './auth';
 
 /**
  * Outermost guard: converts anything thrown inside the handler into the
@@ -10,16 +10,16 @@ import type { HandlerFn } from './with-auth';
  * stack for CloudWatch, answered with a generic 500 so internals never
  * leak into the response.
  */
-export const withErrorBoundary =
+export const catchHandlerErrors =
     (inner: HandlerFn): HandlerFn =>
     async (event, context) => {
         try {
             return await inner(event, context);
         } catch (err) {
             if (err instanceof ApiError) {
-                return fail(err.statusCode, err.code, err.message, err.details);
+                return buildErrorResponse(err.statusCode, err.code, err.message, err.details);
             }
             console.error('unhandled error', err);
-            return fail(500, 'INTERNAL_ERROR', 'Unexpected server error.');
+            return buildErrorResponse(500, 'INTERNAL_ERROR', 'Unexpected server error.');
         }
     };

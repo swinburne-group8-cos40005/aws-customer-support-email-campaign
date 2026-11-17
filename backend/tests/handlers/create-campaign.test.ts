@@ -8,8 +8,8 @@ jest.mock('../../src/services/campaign.service', () => ({
     // The controller maps the 201 body through the repository mapper that
     // the service re-exports; keep the real one so the contract shape is
     // asserted end-to-end.
-    toCampaignResponse: jest.requireActual('../../src/services/campaign.service')
-        .toCampaignResponse,
+    mapCampaignRowToResponse: jest.requireActual('../../src/services/campaign.service')
+        .mapCampaignRowToResponse,
 }));
 
 const createDraftCampaignMock = createDraftCampaign as jest.Mock;

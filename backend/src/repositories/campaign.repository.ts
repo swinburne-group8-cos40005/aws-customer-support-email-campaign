@@ -24,7 +24,7 @@ export interface CreateCampaignInput {
  * taken from input: a campaign can only ever be born as a draft, and the
  * state machine (docs/email-state-machine.md) owns every later transition.
  */
-export const insertCampaign = async (
+export const insertCampaignRow = async (
     tx: Queryable,
     input: CreateCampaignInput,
 ): Promise<CampaignRow> => {
@@ -49,7 +49,7 @@ export const insertCampaign = async (
 };
 
 /** Maps the snake_case storage row onto the camelCase contract body (§2.1). */
-export const toCampaignResponse = (row: CampaignRow) => ({
+export const mapCampaignRowToResponse = (row: CampaignRow) => ({
     campaignId: row.campaign_id,
     name: row.name,
     templateId: row.template_id,

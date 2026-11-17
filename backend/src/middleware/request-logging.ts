@@ -1,12 +1,12 @@
 import type { APIGatewayProxyResult } from 'aws-lambda';
-import type { HandlerFn } from './with-auth';
+import type { HandlerFn } from './auth';
 
 /**
  * One log line per invocation: method, path and duration. Kept minimal
  * on purpose — richer metrics belong to the csep-observability stack
  * (issue #14/#27), not scattered console.log calls in handlers.
  */
-export const withRequestLogging =
+export const logRequestSummary =
     (inner: HandlerFn): HandlerFn =>
     async (event, context) => {
         const started = Date.now();

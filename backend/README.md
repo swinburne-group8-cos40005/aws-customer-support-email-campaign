@@ -13,7 +13,7 @@ Lambda event (HTTP API v2 + JWT authorizer)
         │
 src/handlers/create-campaign.ts      Lambda entry: composes middleware + controller
         │
-src/middleware/                      logging -> error boundary -> auth
+src/middleware/                      request logging -> error boundary -> auth
         │
 src/controllers/                     decode body, validate (zod), delegate, shape response
         │
@@ -21,7 +21,7 @@ src/services/                        business rules, owns the transaction
         │
 src/repositories/                    all SQL lives here
         │
-src/db/connection.ts                 pg Pool, IAM auth, strict TLS, withTransaction
+src/db/connection.ts                 pg Pool, IAM auth, strict TLS, runInTransaction
 ```
 
 Supporting layers:
@@ -36,8 +36,8 @@ Rules of thumb:
   (they answer questions like "does this exist", the service owns the 404).
 - Every audit insert rides the same transaction as the mutation it
   describes (docs/audit-log-strategy.md §5, FR9).
-- Error mapping happens exactly once, in `with-error-boundary`, using the
-  contract envelope from docs/api-contract.md §1.3.
+- Error mapping happens exactly once, in the error-boundary middleware,
+  using the contract envelope from docs/api-contract.md §1.3.
 
 ## Database connectivity (two modes)
 
@@ -81,3 +81,7 @@ are tested at their own seams:
 3. zod schema in `src/schemas/`.
 4. Controller + `composeMiddleware(controller)` handler file.
 5. Route entry in `infra/api.yaml` pointing `Handler` at the new file.
+
+Naming convention: functions use `verbNounNoun` camelCase
+(`loadDatabaseEnv`, `insertCampaignRow`, `mapCampaignRowToResponse`,
+`requireCognitoIdentity`) so a name states what the function does.

@@ -22,7 +22,7 @@ export type InnerHandler = (
 
 /**
  * A middleware-wrapped handler in the chain. `context` is optional because
- * the chain entry (the Lambda runtime) has none yet: withAuth builds the
+ * the chain entry (the Lambda runtime) has none yet: requireCognitoIdentity builds the
  * real RequestContext from verified claims and ignores whatever the
  * runtime passed as its second argument.
  */
@@ -49,7 +49,7 @@ type JwtAuthorizerContext = {
  * The gateway already verified the token (infra/api.yaml); this only
  * unpacks the verified claim — no token parsing happens in Lambda.
  */
-const cognitoSub = (event: ApiEvent): string | null => {
+const extractCognitoSub = (event: ApiEvent): string | null => {
     const authorizer = (event.requestContext as JwtAuthorizerContext).authorizer;
     const claims = authorizer?.jwt?.claims;
     const sub = claims?.sub;
@@ -66,10 +66,10 @@ const cognitoSub = (event: ApiEvent): string | null => {
  * still refuses to run without a resolved identity. Keeps the endpoint
  * safe even if a route is ever misconfigured in the template.
  */
-export const withAuth =
+export const requireCognitoIdentity =
     (inner: InnerHandler): HandlerFn =>
     async (event) => {
-        const sub = cognitoSub(event);
+        const sub = extractCognitoSub(event);
         if (!sub) {
             throw new UnauthorizedError();
         }

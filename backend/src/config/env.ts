@@ -42,7 +42,7 @@ export const RDS_CA_BUNDLE_PATH = 'assets/rds-ca-global-bundle.pem';
  * Throws a plain Error listing what is missing — this is a configuration
  * defect, not a client problem, so it never becomes an HTTP response.
  */
-export const loadEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
+export const loadDatabaseEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
     const iam = iamModeSchema.safeParse(source);
     if (iam.success) {
         return { mode: 'iam', ...iam.data };

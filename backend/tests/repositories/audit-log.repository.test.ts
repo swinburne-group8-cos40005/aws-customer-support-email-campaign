@@ -1,5 +1,5 @@
 import type { Queryable } from '../../src/db/connection';
-import { recordAudit } from '../../src/repositories/audit-log.repository';
+import { insertAuditRecord } from '../../src/repositories/audit-log.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 
@@ -10,9 +10,9 @@ beforeEach(() => {
     tx.query.mockResolvedValue({ rows: [], rowCount: 1 });
 });
 
-describe('recordAudit', () => {
+describe('insertAuditRecord', () => {
     test('writes one row with action and a jsonb before/after snapshot', async () => {
-        await recordAudit(asTx(), {
+        await insertAuditRecord(asTx(), {
             userId: 'usr-agent-1',
             action: 'create',
             entityType: 'campaign',

@@ -1,9 +1,9 @@
-import { withTransaction } from '../db/connection';
-import { recordAudit } from '../repositories/audit-log.repository';
-import { catalogExists } from '../repositories/catalog.repository';
+import { runInTransaction } from '../db/connection';
+import { insertAuditRecord } from '../repositories/audit-log.repository';
+import { checkCatalogExists } from '../repositories/catalog.repository';
 import {
-    insertCampaign,
-    toCampaignResponse,
+    insertCampaignRow,
+    mapCampaignRowToResponse,
     type CampaignRow,
 } from '../repositories/campaign.repository';
 import { NotFoundError } from '../utils/errors';
@@ -28,25 +28,25 @@ export interface CreateCampaignCommand {
  *    machine (docs/email-state-machine.md), not to this endpoint.
  */
 export const createDraftCampaign = async (command: CreateCampaignCommand): Promise<CampaignRow> => {
-    return withTransaction(async (tx) => {
-        const templateExists = await catalogExists(tx, 'templates', command.templateId);
+    return runInTransaction(async (tx) => {
+        const templateExists = await checkCatalogExists(tx, 'templates', command.templateId);
         if (!templateExists) {
             throw new NotFoundError('template', command.templateId);
         }
 
-        const segmentExists = await catalogExists(tx, 'segments', command.segmentId);
+        const segmentExists = await checkCatalogExists(tx, 'segments', command.segmentId);
         if (!segmentExists) {
             throw new NotFoundError('segment', command.segmentId);
         }
 
-        const row = await insertCampaign(tx, {
+        const row = await insertCampaignRow(tx, {
             name: command.name,
             templateId: command.templateId,
             segmentId: command.segmentId,
             createdBy: command.userId,
         });
 
-        await recordAudit(tx, {
+        await insertAuditRecord(tx, {
             userId: command.userId,
             action: 'create',
             entityType: 'campaign',
@@ -66,4 +66,4 @@ export const createDraftCampaign = async (command: CreateCampaignCommand): Promi
     });
 };
 
-export { toCampaignResponse };
+export { mapCampaignRowToResponse };

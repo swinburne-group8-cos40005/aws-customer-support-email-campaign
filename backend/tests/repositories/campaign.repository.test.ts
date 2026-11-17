@@ -1,5 +1,5 @@
 import type { Queryable } from '../../src/db/connection';
-import { insertCampaign, toCampaignResponse, type CampaignRow } from '../../src/repositories/campaign.repository';
+import { insertCampaignRow, mapCampaignRowToResponse, type CampaignRow } from '../../src/repositories/campaign.repository';
 
 const tx: { query: jest.Mock } = { query: jest.fn() };
 
@@ -20,11 +20,11 @@ beforeEach(() => {
     tx.query.mockReset();
 });
 
-describe('insertCampaign', () => {
+describe('insertCampaignRow', () => {
     test('INSERT hard-codes draft status and passes created_by as parameter', async () => {
         tx.query.mockResolvedValue({ rows: [campaignRow()], rowCount: 1 });
 
-        await insertCampaign(asTx(), {
+        await insertCampaignRow(asTx(), {
             name: 'Black Friday',
             templateId: '22222222-2222-4000-8000-000000000001',
             segmentId: '11111111-1111-4000-8000-000000000001',
@@ -45,7 +45,7 @@ describe('insertCampaign', () => {
     test('returns the RETURNING row', async () => {
         tx.query.mockResolvedValue({ rows: [campaignRow()], rowCount: 1 });
 
-        const row = await insertCampaign(asTx(), {
+        const row = await insertCampaignRow(asTx(), {
             name: 'Black Friday',
             templateId: '22222222-2222-4000-8000-000000000001',
             segmentId: '11111111-1111-4000-8000-000000000001',
@@ -60,7 +60,7 @@ describe('insertCampaign', () => {
         tx.query.mockResolvedValue({ rows: [], rowCount: 0 });
 
         await expect(
-            insertCampaign(asTx(), {
+            insertCampaignRow(asTx(), {
                 name: 'Black Friday',
                 templateId: '22222222-2222-4000-8000-000000000001',
                 segmentId: '11111111-1111-4000-8000-000000000001',
@@ -70,9 +70,9 @@ describe('insertCampaign', () => {
     });
 });
 
-describe('toCampaignResponse', () => {
+describe('mapCampaignRowToResponse', () => {
     test('maps the snake_case storage row onto the contract body (§2.1)', () => {
-        expect(toCampaignResponse(campaignRow())).toEqual({
+        expect(mapCampaignRowToResponse(campaignRow())).toEqual({
             campaignId: '33333333-3333-4000-8000-000000000009',
             name: 'Black Friday',
             templateId: '22222222-2222-4000-8000-000000000001',
