@@ -20,9 +20,26 @@ export interface CreateCampaignInput {
 }
 
 /**
- * Inserts a draft campaign. Status is hard-coded to 'draft' rather than
- * taken from input: a campaign can only ever be born as a draft, and the
- * state machine (docs/email-state-machine.md) owns every later transition.
+ * Inserts a draft campaign row. Status is hard-coded to 'draft' rather
+ * than taken from input: a campaign can only ever be born as a draft,
+ * and the state machine (docs/email-state-machine.md) owns every later
+ * transition.
+ *
+ * @param tx - Open transaction to run the INSERT on.
+ * @param input - Validated campaign fields plus the creator's identity.
+ *
+ * @returns The stored row as promised by the RETURNING clause.
+ *
+ * @throws Error When the INSERT RETURNING yields no row — a driver/PG
+ *         defect that must fail loudly, not shape-shift.
+ *
+ * @example
+ * const row = await insertCampaignRow(tx, {
+ *     name: 'Black Friday',
+ *     templateId: TEMPLATE_ID,
+ *     segmentId: SEGMENT_ID,
+ *     createdBy: 'usr-agent-1',
+ * });
  */
 export const insertCampaignRow = async (
     tx: Queryable,
@@ -48,7 +65,18 @@ export const insertCampaignRow = async (
     return row as unknown as CampaignRow;
 };
 
-/** Maps the snake_case storage row onto the camelCase contract body (§2.1). */
+/**
+ * Maps the snake_case storage row onto the camelCase contract body
+ * (docs/api-contract.md §2.1). Single source of truth for the response
+ * shape — controllers must not duplicate the mapping.
+ *
+ * @param row - Row read from the campaigns table.
+ *
+ * @returns Body fields exactly as the contract names them.
+ *
+ * @example
+ * buildSuccessResponse(201, mapCampaignRowToResponse(row));
+ */
 export const mapCampaignRowToResponse = (row: CampaignRow) => ({
     campaignId: row.campaign_id,
     name: row.name,

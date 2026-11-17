@@ -2,9 +2,16 @@ import type { APIGatewayProxyResult } from 'aws-lambda';
 import type { HandlerFn } from './auth';
 
 /**
- * One log line per invocation: method, path and duration. Kept minimal
- * on purpose — richer metrics belong to the csep-observability stack
- * (issue #14/#27), not scattered console.log calls in handlers.
+ * One log line per invocation: method, path, status and duration. Kept
+ * minimal on purpose — richer metrics belong to the csep-observability
+ * stack (issue #14/#27), not scattered console.log calls in handlers.
+ *
+ * @param inner - Handler to wrap; its result is returned unchanged.
+ *
+ * @returns A chain handler that logs then delegates.
+ *
+ * @example
+ * const logged = logRequestSummary(catchHandlerErrors(controller));
  */
 export const logRequestSummary =
     (inner: HandlerFn): HandlerFn =>

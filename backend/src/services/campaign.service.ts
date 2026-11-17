@@ -26,6 +26,23 @@ export interface CreateCampaignCommand {
  *    docs/audit-log-strategy.md §5) — commit together or not at all;
  *  - campaigns are born as 'draft'; transitions belong to the state
  *    machine (docs/email-state-machine.md), not to this endpoint.
+ *
+ * @param command - Validated body fields plus the caller's identity
+ *                  resolved by the auth middleware.
+ *
+ * @returns The stored campaign row.
+ *
+ * @throws NotFoundError When the referenced template or segment does
+ *         not exist in Aurora; nothing is inserted and no audit row is
+ *         written.
+ *
+ * @example
+ * const row = await createDraftCampaign({
+ *     name: 'Black Friday',
+ *     templateId: TEMPLATE_ID,
+ *     segmentId: SEGMENT_ID,
+ *     userId: 'usr-agent-1',
+ * });
  */
 export const createDraftCampaign = async (command: CreateCampaignCommand): Promise<CampaignRow> => {
     return runInTransaction(async (tx) => {

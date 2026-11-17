@@ -14,6 +14,19 @@ export interface AuditEntry {
  * rows ride the same transaction as the mutation they describe
  * (docs/audit-log-strategy.md §5) so the pair commits or rolls back
  * together — FR9 guarantees an auditable history with no blind spots.
+ *
+ * @param tx - The same transaction the mutation runs on.
+ * @param entry - Who did what to which entity, with a before/after
+ *                snapshot per docs/audit-log-strategy.md §4.
+ *
+ * @example
+ * await insertAuditRecord(tx, {
+ *     userId: command.userId,
+ *     action: 'create',
+ *     entityType: 'campaign',
+ *     entityId: row.campaign_id,
+ *     changes: { before: null, after: { status: row.status } },
+ * });
  */
 export const insertAuditRecord = async (tx: Queryable, entry: AuditEntry): Promise<void> => {
     await tx.query(

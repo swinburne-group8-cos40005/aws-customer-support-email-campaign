@@ -38,9 +38,22 @@ export type Env = IamEnv | LocalEnv;
 export const RDS_CA_BUNDLE_PATH = 'assets/rds-ca-global-bundle.pem';
 
 /**
- * Parses and validates process.env exactly once per Lambda container.
- * Throws a plain Error listing what is missing — this is a configuration
- * defect, not a client problem, so it never becomes an HTTP response.
+ * Parses and validates the process environment exactly once per Lambda
+ * container. Two database modes exist on purpose (ADR-0005 / ADR-0006
+ * D3): `iam` (deployed, credentials signed per connection) and `local`
+ * (development, plain DATABASE_URL).
+ *
+ * @param source - Environment map to parse; defaults to process.env,
+ *                 which is what the Lambda runtime provides.
+ *
+ * @returns A discriminated Env describing which mode is active.
+ *
+ * @throws Error When neither mode's variables are satisfied — this is a
+ *         configuration defect, not a client problem, so it never
+ *         becomes an HTTP response.
+ *
+ * @example
+ * const env = loadDatabaseEnv(); // { mode: 'iam', DB_HOST: ..., ... }
  */
 export const loadDatabaseEnv = (source: NodeJS.ProcessEnv = process.env): Env => {
     const iam = iamModeSchema.safeParse(source);

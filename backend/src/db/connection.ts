@@ -63,7 +63,19 @@ const createPool = (env: Env): Pool => {
     });
 };
 
-/** Lazily created; reused across warm Lambda invocations. */
+/**
+ * Lazily creates the process-wide Pool and reuses it across warm Lambda
+ * invocations. In iam mode every new connection gets a freshly signed
+ * IAM token; in local mode it connects with DATABASE_URL.
+ *
+ * @returns The shared pg Pool for this container.
+ *
+ * @throws Error When the environment satisfies neither mode
+ *         (propagated from loadDatabaseEnv).
+ *
+ * @example
+ * const client = await getDatabasePool().connect();
+ */
 export const getDatabasePool = (): Pool => {
     if (!pool) {
         pool = createPool(loadDatabaseEnv());
@@ -71,6 +83,13 @@ export const getDatabasePool = (): Pool => {
     return pool;
 };
 
+/**
+ * Closes the pool and forgets it, so the next getDatabasePool call
+ * builds a fresh one. Used by integration tests between scenarios.
+ *
+ * @example
+ * await closeDatabasePool();
+ */
 export const closeDatabasePool = async (): Promise<void> => {
     if (pool) {
         await pool.end();
@@ -79,9 +98,24 @@ export const closeDatabasePool = async (): Promise<void> => {
 };
 
 /**
- * Runs fn inside a single transaction. audit_logs inserts ride the same
- * transaction as the mutation they describe (docs/audit-log-strategy.md §5):
- * if the mutation fails, the audit row rolls back with it.
+ * Runs fn inside a single transaction: BEGIN, fn, COMMIT — and ROLLBACK
+ * when fn throws or the COMMIT fails. audit_logs inserts ride the same
+ * transaction as the mutation they describe (docs/audit-log-strategy.md
+ * §5): if the mutation fails, the audit row rolls back with it.
+ *
+ * @param fn - Callback receiving the transaction-scoped Queryable; all
+ *             of its SQL must run through that handle.
+ *
+ * @returns Whatever fn resolves with.
+ *
+ * @throws Unknown Whatever fn throws, after the ROLLBACK — callers see
+ *         the original business error, never a transaction artifact.
+ *
+ * @example
+ * const row = await runInTransaction(async (tx) => {
+ *     await insertCampaignRow(tx, input);
+ *     await insertAuditRecord(tx, entry);
+ * });
  */
 export async function runInTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
     const client: PoolClient = await getDatabasePool().connect();

@@ -45,9 +45,18 @@ type JwtAuthorizerContext = {
 };
 
 /**
- * Cognito `sub` claim injected by the API Gateway JWT authorizer.
- * The gateway already verified the token (infra/api.yaml); this only
- * unpacks the verified claim — no token parsing happens in Lambda.
+ * Unpacks the Cognito `sub` claim the API Gateway JWT authorizer already
+ * verified (infra/api.yaml). No token parsing happens in Lambda — this
+ * only reads the verified claim. Returns null when the authorizer
+ * context is stripped or the sub is not a string, so a misconfigured
+ * route degrades to a 401 instead of crashing into a 500.
+ *
+ * @param event - HTTP API v2 event carrying the verified JWT claims.
+ *
+ * @returns The verified Cognito subject, or null when absent.
+ *
+ * @example
+ * const sub = extractCognitoSub(event); // 'usr-agent-1'
  */
 const extractCognitoSub = (event: ApiEvent): string | null => {
     const authorizer = (event.requestContext as JwtAuthorizerContext).authorizer;
@@ -62,9 +71,22 @@ const extractCognitoSub = (event: ApiEvent): string | null => {
 };
 
 /**
- * Defence in depth: the gateway is the primary gate, but the handler
- * still refuses to run without a resolved identity. Keeps the endpoint
- * safe even if a route is ever misconfigured in the template.
+ * Middleware guarding every endpoint: refuses to run the inner handler
+ * without a resolved identity. The gateway is the primary gate, but this
+ * keeps the endpoint safe even if a route is ever misconfigured in the
+ * template.
+ *
+ * @param inner - Controller to run once the identity is resolved.
+ *
+ * @returns A chain handler that throws UnauthorizedError when no valid
+ *          Cognito claims are present, otherwise calls the controller
+ *          with the resolved RequestContext.
+ *
+ * @throws UnauthorizedError When the event carries no Cognito `sub`.
+ *
+ * @example
+ * export const handler = composeMiddleware(createCampaignController);
+ * // requireCognitoIdentity runs inside that composition.
  */
 export const requireCognitoIdentity =
     (inner: InnerHandler): HandlerFn =>

@@ -4,11 +4,19 @@ import { buildErrorResponse } from '../utils/http';
 import type { HandlerFn } from './auth';
 
 /**
- * Outermost guard: converts anything thrown inside the handler into the
- * contract's error envelope (docs/api-contract.md §1.3). ApiError (and
- * subclasses) map field-for-field; anything else is a bug — logged with
- * stack for CloudWatch, answered with a generic 500 so internals never
- * leak into the response.
+ * Outermost guard of the middleware chain: converts anything thrown
+ * inside the handler into the contract's error envelope
+ * (docs/api-contract.md §1.3). ApiError (and subclasses) map
+ * field-for-field; anything else is a bug — logged with stack for
+ * CloudWatch, answered with a generic 500 so internals never leak.
+ *
+ * @param inner - Handler to run inside the try/catch.
+ *
+ * @returns A chain handler that never throws: every failure becomes an
+ *          error-envelope response.
+ *
+ * @example
+ * const guarded = catchHandlerErrors(requireCognitoIdentity(controller));
  */
 export const catchHandlerErrors =
     (inner: HandlerFn): HandlerFn =>

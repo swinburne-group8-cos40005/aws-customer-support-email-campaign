@@ -13,10 +13,22 @@ const COLUMN_BY_TABLE: Record<CatalogTable, 'template_id' | 'segment_id'> = {
 };
 
 /**
- * Plain existence probe — returns the answer instead of throwing, so the
- * service layer owns the 404 decision. Inside a transaction on purpose:
- * FK rows are checked at write time so the campaign and the missing
- * reference cannot disagree between check and insert.
+ * Plain existence probe for a catalog table — returns the answer instead
+ * of throwing, so the service layer owns the 404 decision. Call inside a
+ * transaction on purpose: FK rows are checked at write time so the
+ * campaign and the missing reference cannot disagree between check and
+ * insert.
+ *
+ * @param tx - Open transaction to run the probe on.
+ * @param table - Which catalog table to probe ('templates' | 'segments').
+ * @param id - Primary key to look for.
+ *
+ * @returns True when at least one row matches the id.
+ *
+ * @example
+ * if (!(await checkCatalogExists(tx, 'templates', command.templateId))) {
+ *     throw new NotFoundError('template', command.templateId);
+ * }
  */
 export const checkCatalogExists = async (
     tx: Queryable,
