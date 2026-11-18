@@ -177,6 +177,19 @@ Outputs:
     Value: !GetAtt HttpApi.ApiEndpoint
     Export:
       Name: csep-api-ApiEndpoint
+  # Single runtime-config object for the SPA (#9): read via DescribeStacks
+  # at boot instead of assembling three separate exports. Fn::ImportValue
+  # values feed the Fn::Sub map because Fn::Sub cannot resolve import
+  # names directly.
+  FrontendConfig:
+    Description: Runtime config for the SPA — cognitoClientId, cognitoDomain, apiBaseUrl
+    Value: !Sub
+      - '{"cognitoClientId":"${Client}","cognitoDomain":"${Domain}","apiBaseUrl":"${Api}"}'
+      - Client:
+          Fn::ImportValue: csep-auth-UserPoolClientId
+        Domain:
+          Fn::ImportValue: csep-auth-HostedUiDomain
+        Api: !GetAtt HttpApi.ApiEndpoint
   CreateCampaignFunctionArn:
     Value: !GetAtt CreateCampaignFunction.Arn
     Export:
