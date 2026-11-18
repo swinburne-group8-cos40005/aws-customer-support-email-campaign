@@ -8,9 +8,6 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-  DispatcherArtifactBucket:
-    Type: String
-    Description: S3 bucket holding the packaged Dispatcher Lambda bundle
   DispatcherArtifactKey:
     Type: String
     Description: S3 key of the packaged Dispatcher Lambda bundle
@@ -108,7 +105,8 @@ Resources:
       Architectures: [arm64]
       Role: !GetAtt DispatcherLambdaRole.Arn
       Code:
-        S3Bucket: !Ref DispatcherArtifactBucket
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
         S3Key: !Ref DispatcherArtifactKey
       Environment:
         Variables:
