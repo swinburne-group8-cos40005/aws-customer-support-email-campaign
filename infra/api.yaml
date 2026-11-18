@@ -46,7 +46,7 @@ Resources:
       CorsConfiguration:
         AllowOrigins: !If
           - AllowLocalhost
-          - [!Ref FrontendOrigin, "https://localhost:5173"]
+          - [!Ref FrontendOrigin, "http://localhost:5173"]
           - [!Ref FrontendOrigin]
         AllowMethods: [GET, POST, PUT, DELETE]
         AllowHeaders: [Authorization, Content-Type]
