@@ -1121,6 +1121,183 @@ Resources:
           AccountId: !Ref AWS::AccountId
           ApiId: !Ref HttpApi
 
+  GetCustomerPreferencesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-get-customer-preferences-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: get-customer-preferences.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  GetCustomerPreferencesIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt GetCustomerPreferencesFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  GetCustomerPreferencesRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/customers/{id}/preferences"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${GetCustomerPreferencesIntegration}"
+
+  GetCustomerPreferencesInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetCustomerPreferencesFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/customers/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  UpdateCustomerPreferencesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-update-customer-preferences-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: update-customer-preferences.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  UpdateCustomerPreferencesIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt UpdateCustomerPreferencesFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  UpdateCustomerPreferencesRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "PUT /v1/customers/{id}/preferences"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${UpdateCustomerPreferencesIntegration}"
+
+  UpdateCustomerPreferencesInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateCustomerPreferencesFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/PUT/v1/customers/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  ListAuditLogsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-list-audit-logs-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: list-audit-logs.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ListAuditLogsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ListAuditLogsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ListAuditLogsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/audit-logs"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ListAuditLogsIntegration}"
+
+  ListAuditLogsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ListAuditLogsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/audit-logs"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
