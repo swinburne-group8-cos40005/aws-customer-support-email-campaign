@@ -1,11 +1,12 @@
 # Infrastructure — CloudFormation Templates
 
-Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and issue #22: Lambda IAM authentication as the dedicated `csep_app` user, with that user's generated password held by Secrets Manager for the Proxy.
+Templates implement ADR-0004 (CloudFormation YAML, six stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and issue #22: Lambda IAM authentication as the dedicated `csep_app` user, with that user's generated password held by Secrets Manager for the Proxy.
 
 ## Stack status
 
 | Template | Stack | Contents | Status |
 | :--- | :--- | :--- | :--- |
+| `artifact.yaml` | `csep-artifact` | S3 bucket holding packaged Lambda bundles (versioned, private) | **this PR** |
 | `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | **this PR (draft for review)** |
 | `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | **this PR (draft for review)** |
 | `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | **this PR (draft for review)** |
@@ -15,10 +16,22 @@ Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<conc
 ## Deploy order
 
 ```
-csep-auth  →  csep-data  →  schema bootstrap  →  csep-api
+csep-artifact  →  csep-auth  →  csep-data  →  schema bootstrap  →  csep-api
 ```
 
-### 0. csep-auth
+### 0. csep-artifact
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-artifact \
+  --template-file infra/artifact.yaml \
+  --parameter-overrides \
+    EnvironmentName=dev
+```
+
+`csep-artifact` owns the S3 bucket that stores packaged Lambda bundles. It is deployed first because `csep-api` imports the bucket name rather than receiving it as a deploy parameter. The bucket is disposable: deleting the stack deletes the stored packages, so re-upload a fresh bundle before redeploying `csep-api`. Versioning keeps recent bundles available for rollback; a lifecycle rule expires noncurrent versions after 30 days (ADR-0004 cost control).
+
+### 1. csep-auth
 
 ```sh
 aws cloudformation deploy \
@@ -33,7 +46,7 @@ aws cloudformation deploy \
 
 The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique. The `UserPoolId`, `UserPoolClientId`, and full hosted-login domain URL are exported for the API and frontend.
 
-### 1. csep-data
+### 2. csep-data
 
 ```sh
 aws cloudformation deploy \
@@ -113,23 +126,22 @@ aws cloudformation deploy \
 
    Stop the SSM session, terminate the EC2 instance, and delete its temporary security group. The Proxy is configured only with the `csep_app` secret; the master secret is not available to the Proxy or API Lambda.
 
-### 2. csep-api
+### 3. csep-api
 
 ```sh
-# Package the backend bundle first (built dist uploaded to S3), then:
+# Package the backend bundle first (built dist uploaded to the artifact bucket), then:
 aws cloudformation deploy \
   --stack-name csep-api \
   --template-file infra/api.yaml \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
-    ArtifactBucket=<bucket> \
     ArtifactKey=<key> \
     SubnetIds=<subnet-a>,<subnet-b> \
     VpcId=<vpc-id>
 ```
 
-`csep-api` imports the Cognito client ID and issuer plus the database endpoint, name, and username from the other stacks. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
+`csep-api` imports the Cognito client ID and issuer, the database endpoint, name, and username, and the artifact bucket name from the other stacks. Only the bundle key varies per deploy. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
 
 ## Design notes
 
