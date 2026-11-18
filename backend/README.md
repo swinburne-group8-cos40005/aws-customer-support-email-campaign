@@ -1,8 +1,8 @@
 # Campaign API backend
 
-TypeScript Lambda backing `POST /v1/campaigns` (US01, docs/api-contract.md §2.1).
-The handler monolith was rewritten into horizontal layers so the remaining
-endpoints can be added by following the same seams.
+TypeScript Lambdas backing the `/campaigns` endpoints (docs/api-contract.md
+§2.1). The handler monolith was rewritten into horizontal layers so every
+endpoint is added by following the same seams.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ Request flow, outermost first:
 ```
 Lambda event (HTTP API v2 + JWT authorizer)
         │
-src/handlers/create-campaign.ts      Lambda entry: straight sequential pipeline
+src/handlers/<route>.ts              Lambda entry: straight sequential pipeline
         │
 src/http/                            auth -> controller -> error mapping -> logging
         │
@@ -27,7 +27,9 @@ src/db/connection.ts                 pg Pool, IAM auth, strict TLS, runInTransac
 Supporting layers:
 
 - `src/config/env.ts` — zod-validated environment contract, parsed once per container.
-- `src/schemas/` — request-body schemas (single source of truth for §2.1 field rules).
+- `src/schemas/` — request/query schemas (single source of truth for §2.1 field rules).
+- `src/utils/validation.ts` — one place that turns raw body/query/path values into
+  validated input, so controllers stay thin.
 - `src/utils/` — domain error classes (`ApiError` and friends) and HTTP response helpers.
 
 Rules of thumb:
@@ -45,6 +47,27 @@ Rules of thumb:
   `../../` relative paths. TypeScript resolves them via
   `moduleResolution: node16`, Jest via `moduleNameMapper`, and the
   esbuild bundle at deploy time resolves the `imports` field natively.
+
+## Implemented handlers
+
+One Lambda per route, all bundled from this package; `infra/api.yaml` binds
+each function to its exported handler name.
+
+| Route | Handler file | Controller |
+| :--- | :--- | :--- |
+| `POST /v1/campaigns` | `create-campaign.handler` | `handleCreateCampaignRequest` |
+| `GET /v1/campaigns` | `list-campaigns.handler` | `handleListCampaignsRequest` |
+| `GET /v1/campaigns/{id}` | `get-campaign.handler` | `handleGetCampaignRequest` |
+| `PUT /v1/campaigns/{id}` | `update-campaign.handler` | `handleUpdateCampaignRequest` |
+| `DELETE /v1/campaigns/{id}` | `delete-campaign.handler` | `handleDeleteCampaignRequest` |
+| `POST /v1/campaigns/{id}/schedule` | `schedule-campaign.handler` | `handleScheduleCampaignRequest` |
+| `POST /v1/campaigns/{id}/send` | `send-campaign.handler` | `handleSendCampaignRequest` |
+| `POST /v1/campaigns/{id}/cancel` | `cancel-campaign.handler` | `handleCancelCampaignRequest` |
+| `GET /v1/campaigns/{id}/logs` | `list-campaign-logs.handler` | `handleListCampaignLogsRequest` |
+
+State transitions follow `docs/email-state-machine.md`; the dispatcher
+invocation itself belongs to the messaging stack (#26/#47), so `/send` owns
+the `draft -> sending` transition and its audit row.
 
 ## Database connectivity (two modes)
 
@@ -86,7 +109,7 @@ are tested at their own seams:
 1. Repository functions for the new SQL.
 2. Service function owning rules + transaction + audit.
 3. zod schema in `src/schemas/`.
-4. Controller + `composeMiddleware(controller)` handler file.
+4. Controller function + one handler file per route (straight pipeline).
 5. Route entry in `infra/api.yaml` pointing `Handler` at the new file.
 
 Naming convention: functions use `verbNounNoun` camelCase
