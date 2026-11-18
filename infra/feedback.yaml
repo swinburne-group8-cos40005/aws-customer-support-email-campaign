@@ -38,6 +38,13 @@ Parameters:
     Description: SQS visibility timeout in seconds for EventHandler processing
 
 Resources:
+  FeedbackDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub csep-feedback-dlq-${EnvironmentName}
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
   FeedbackQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -45,6 +52,9 @@ Resources:
       MessageRetentionPeriod: 1209600
       VisibilityTimeout: !Ref QueueVisibilityTimeout
       SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeedbackDeadLetterQueue.Arn
+        maxReceiveCount: 5
 
   FeedbackQueuePolicy:
     Type: AWS::SQS::QueuePolicy
@@ -160,6 +170,11 @@ Outputs:
     Value: !GetAtt FeedbackQueue.Arn
     Export:
       Name: csep-feedback-FeedbackQueueArn
+  FeedbackDeadLetterQueueArn:
+    Description: ARN of the feedback dead-letter queue for poisoned SES events
+    Value: !GetAtt FeedbackDeadLetterQueue.Arn
+    Export:
+      Name: csep-feedback-FeedbackDeadLetterQueueArn
   EventHandlerLambdaArn:
     Description: ARN of the Lambda processing SES events
     Value: !GetAtt EventHandlerLambda.Arn
