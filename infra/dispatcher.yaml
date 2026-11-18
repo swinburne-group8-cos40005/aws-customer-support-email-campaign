@@ -138,8 +138,8 @@ Resources:
               Service: scheduler.amazonaws.com
             Action: sts:AssumeRole
             Condition:
-              ArnEquals:
-                aws:SourceArn: !GetAtt SchedulerGroup.Arn
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${SchedulerGroup}/*"
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
       Policies:
@@ -157,7 +157,7 @@ Resources:
       FunctionName: !Ref DispatcherLambda
       Action: lambda:InvokeFunction
       Principal: scheduler.amazonaws.com
-      SourceArn: !GetAtt SchedulerGroup.Arn
+      SourceArn: !Sub "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${SchedulerGroup}/*"
 
 Outputs:
   SendQueueUrl:
