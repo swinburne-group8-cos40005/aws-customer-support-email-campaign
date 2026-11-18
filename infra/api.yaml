@@ -32,6 +32,31 @@ Parameters:
     AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
     ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
 
+WorkerHandler:
+    Type: String
+    Default: worker.handler
+    Description: Exported handler for the SQS email worker Lambda function
+  SesDomain:
+    Type: String
+    Default: example.com
+    Description: Verified Amazon SES sending domain identity (used to scope ses:SendEmail IAM policy)
+  SesFromEmail:
+    Type: String
+    Default: noreply@example.com
+    Description: Verified sender email address on the SES domain (e.g. noreply@domain.com)
+  WorkerBatchSize:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 10
+    Description: Number of SQS messages delivered per Worker Lambda invocation
+  WorkerMaxConcurrency:
+    Type: Number
+    Default: 5
+    MinValue: 2
+    MaxValue: 50
+    Description: Maximum concurrent Worker Lambda instances enforced by SQS to protect RDS Proxy connections
+
 Conditions:
   AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
