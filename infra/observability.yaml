@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  CSEP Campaign Health Dashboard (issue #28 - standalone lintable draft).
+  Campaign Health Dashboard (issue #28 - standalone lintable draft).
 
 Parameters:
   EnvironmentName:
@@ -15,8 +15,130 @@ Parameters:
   DeadLetterQueueName:
     Type: String
     Default: PLACEHOLDER_DLQ_NAME
+  DLQAlarmThreshold:
+    Type: Number
+    Default: 0
+    Description: Alarm when DLQ messages exceed this value.
+  QueueAgeThreshold:
+    Type: Number
+    Default: 300
+    Description: Maximum permitted age of the oldest queued message in seconds.
+  Api5xxThreshold:
+    Type: Number
+    Default: 5
+    Description: Number of API 5xx errors before triggering an alarm.
+  LambdaErrorThreshold:
+    Type: Number
+    Default: 1
+  LambdaThrottleThreshold:
+    Type: Number
+    Default: 1
 
 Resources:
+
+  # SQS QUEUE ALARMS
+
+  DLQDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub csep-dlq-depth-${EnvironmentName}
+      AlarmDescription: >
+        Triggers when one or more messages enter the dead-letter queue.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref DeadLetterQueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref DLQAlarmThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  QueueAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub csep-queue-age-${EnvironmentName}
+      AlarmDescription: >
+        Triggers when the oldest message remains in the main queue
+        longer than the configured threshold.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref MainQueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: !Ref QueueAgeThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # API GATEWAY ALARMS
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub csep-api-5xx-${EnvironmentName}
+      AlarmDescription: >
+        Triggers when API Gateway returns too many server errors.
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref ApiId
+        - Name: Stage
+          Value: "$default"
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref Api5xxThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  # LAMBDA ALARMS
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub csep-lambda-errors-${EnvironmentName}
+      AlarmDescription: >
+        Triggers when the campaign Lambda reports an execution error.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub csep-create-campaign-${EnvironmentName}
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref LambdaErrorThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub csep-lambda-throttles-${EnvironmentName}
+      AlarmDescription: >
+        Triggers when campaign Lambda invocations are throttled.
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub csep-create-campaign-${EnvironmentName}
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: !Ref LambdaThrottleThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
 
   # BACH TUNG'S SECTION
   # CLOUDWATCH DASHBOARD (issue #28)
@@ -41,8 +163,10 @@ Resources:
           {"type": "metric", "x": 12, "y": 17, "width": 12, "height": 6, "properties": {"title": "API requests and errors", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Sum", "period": 60, "metrics": [["AWS/ApiGateway", "Count", "ApiId", "${ApiId}", "Stage", "$default", {"label": "Requests"}], ["AWS/ApiGateway", "4xx", "ApiId", "${ApiId}", "Stage", "$default", {"label": "4xx (client errors)", "color": "#ff7f0e"}], ["AWS/ApiGateway", "5xx", "ApiId", "${ApiId}", "Stage", "$default", {"label": "5xx (server errors)", "color": "#d62728"}]]}},
           {"type": "metric", "x": 0, "y": 23, "width": 12, "height": 6, "properties": {"title": "Campaign Lambda: invocations, errors, throttles", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Sum", "period": 60, "metrics": [["AWS/Lambda", "Invocations", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "Invocations"}], ["AWS/Lambda", "Errors", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "Errors", "color": "#d62728"}], ["AWS/Lambda", "Throttles", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "Throttles", "color": "#ff7f0e"}]]}},
           {"type": "metric", "x": 12, "y": 23, "width": 12, "height": 6, "properties": {"title": "Campaign Lambda: duration (ms)", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Average", "period": 60, "metrics": [["AWS/Lambda", "Duration", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "Average", "stat": "Average"}], ["AWS/Lambda", "Duration", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "p95", "stat": "p95"}]]}},
-          {"type": "metric", "x": 0, "y": 29, "width": 12, "height": 6, "properties": {"title": "Application log metrics (from log filters)", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Sum", "period": 60, "metrics": [["CSEP/Application", "LambdaErrors", {"label": "ERROR log lines", "color": "#d62728"}], ["CSEP/Application", "AuditEvents", {"label": "AUDIT log lines"}]]}}]}
-          
+          {"type": "metric", "x": 0, "y": 29, "width": 12, "height": 6, "properties": {"title": "Application log metrics (from log filters)", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Sum", "period": 60, "metrics": [["CSEP/Application", "LambdaErrors", {"label": "ERROR log lines", "color": "#d62728"}], ["CSEP/Application", "AuditEvents", {"label": "AUDIT log lines"}]]}},
+          {"type": "alarm", "x": 12, "y": 29, "width": 12, "height": 6, "properties": {"title": "Alarm status", "alarms": ["${DLQDepthAlarm.Arn}", "${QueueAgeAlarm.Arn}", "${Api5xxAlarm.Arn}", "${LambdaErrorsAlarm.Arn}", "${LambdaThrottlesAlarm.Arn}"]}}
+        ]}
+
 Outputs:
 
   CampaignHealthDashboardName:
@@ -50,5 +174,3 @@ Outputs:
     Value: !Ref CampaignHealthDashboard
     Export:
       Name: csep-observability-CampaignHealthDashboardName
-
-
