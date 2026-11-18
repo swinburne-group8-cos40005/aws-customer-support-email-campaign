@@ -13,6 +13,7 @@ in each group for a guided tour of the design.
 | [ADR-0004](adr/ADR-0004-cloudformation-for-infrastructure.md) | CloudFormation YAML for all infrastructure |
 | [ADR-0005](adr/ADR-0005-database-access-path-rds-proxy-pg.md) | Database access path: RDS Proxy + `pg` driver |
 | [ADR-0006](adr/ADR-0006-credential-flow-iam-auth-and-secrets-manager.md) | Credential flow: IAM auth + Secrets Manager |
+| [ADR-0007](adr/ADR-0007-ses-event-routing-via-sns-and-dlq-redrive.md) | SES event routing via SNS and the main-queue DLQ redrive policy |
 
 ## Specifications and design
 
