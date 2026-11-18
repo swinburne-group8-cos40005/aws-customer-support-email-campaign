@@ -14,9 +14,8 @@ Parameters:
   FrontendOrigin:
     Type: String
     Description: Deployed frontend origin used as hosted-UI callback and sign-out URL
-    AllowedPattern: '^https?://[A-Za-z0-9.-]+(:[0-9]+)?$'
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
     ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
-  
 Conditions:
   AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
