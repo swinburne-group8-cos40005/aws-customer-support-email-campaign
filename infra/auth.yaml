@@ -63,9 +63,12 @@ Resources:
       # Public client (no secret) — SPA + PKCE. The client secret
       # cannot be safely stored in a browser bundle.
       GenerateSecret: false
+      # SRP sign-in stays for direct SDK use; ALLOW_REFRESH_TOKEN_AUTH is
+      # removed because refresh-token rotation is incompatible with the
+      # REFRESH_TOKEN_AUTH flow — the SPA refreshes via the hosted-UI
+      # oauth2/token refresh_token grant instead.
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
-        - ALLOW_REFRESH_TOKEN_AUTH
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthFlows:
         - code # authorization-code + PKCE
@@ -93,6 +96,11 @@ Resources:
       # Explicit per ADR-0004: issued tokens can be revoked via the
       # API (e.g., on logout), not left valid until expiry.
       EnableTokenRevocation: true
+      # Explicit per ADR-0004 ("PKCE, rotation, revocation"): each token
+      # refresh returns a new refresh token, valid only for the remainder
+      # of the original RefreshTokenValidity window.
+      RefreshTokenRotation:
+        Feature: ENABLED
       # Return a generic error for wrong-username attempts instead of
       # revealing which accounts exist.
       PreventUserExistenceErrors: ENABLED
