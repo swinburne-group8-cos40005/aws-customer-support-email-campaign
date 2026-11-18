@@ -1,0 +1,473 @@
+{
+    "info": {
+        "name": "Campaign API — Issue #32 (preferences and audit logs)",
+        "description": "Smoke tests for /customers/{id}/preferences and /audit-logs (issue #32, endpoint group 3/3). Set {{baseUrl}} and {{cognitoIdToken}}; the seed database provides customer 00000000-0000-4000-8000-000000000001 (opted in) and 00000000-0000-4000-8000-000000000006 (suppressed with manual_opt_out).",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000"
+        },
+        {
+            "key": "cognitoIdToken",
+            "value": "<paste-cognito-id-token>"
+        },
+        {
+            "key": "customerId",
+            "value": "00000000-0000-4000-8000-000000000001"
+        },
+        {
+            "key": "suppressedCustomerId",
+            "value": "00000000-0000-4000-8000-000000000006"
+        },
+        {
+            "key": "auditCursor",
+            "value": ""
+        }
+    ],
+    "item": [
+        {
+            "name": "GET /customers/{id}/preferences — opted in",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/customers/{{customerId}}/preferences",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "customers",
+                        "{{customerId}}",
+                        "preferences"
+                    ]
+                },
+                "description": "Opt-out is membership of email_suppressions; a customer without a row is opted in."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('opted-in body has null metadata', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.isOptedOut).to.eql(false);",
+                            "  pm.expect(b.reason).to.eql(null);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /customers/{id}/preferences — suppressed (seed)",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/customers/{{suppressedCustomerId}}/preferences",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "customers",
+                        "{{suppressedCustomerId}}",
+                        "preferences"
+                    ]
+                },
+                "description": "Seed row: khoa.vo@example.com is suppressed with reason manual_opt_out."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('suppressed body carries reason and timestamp', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.isOptedOut).to.eql(true);",
+                            "  pm.expect(b.reason).to.be.a('string');",
+                            "  pm.expect(b.suppressedAt).to.be.a('string');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PUT /customers/{id}/preferences — opt out",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/customers/{{customerId}}/preferences",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "customers",
+                        "{{customerId}}",
+                        "preferences"
+                    ]
+                },
+                "description": "Upserts an email_suppressions row and writes the opt_out audit record.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"isOptedOut\": true,\n  \"reason\": \"customer_requested\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('reason is recorded', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.isOptedOut).to.eql(true);",
+                            "  pm.expect(b.reason).to.eql('customer_requested');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PUT /customers/{id}/preferences — opt back in",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/customers/{{customerId}}/preferences",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "customers",
+                        "{{customerId}}",
+                        "preferences"
+                    ]
+                },
+                "description": "Removes the suppression row and writes opt_in. Answers 409 when the row came from a bounce or complaint.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"isOptedOut\": false\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200 or 409 for a deliverability suppression', () => {",
+                            "  pm.expect([200, 409]).to.include(pm.response.code);",
+                            "});",
+                            "pm.test('opt-in body has null metadata', () => {",
+                            "  if (pm.response.code === 200) {",
+                            "    const b = pm.response.json();",
+                            "    pm.expect(b.isOptedOut).to.eql(false);",
+                            "    pm.expect(b.reason).to.eql(null);",
+                            "  }",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PUT /customers/{id}/preferences — 400 bounce reason",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/customers/{{customerId}}/preferences",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "customers",
+                        "{{customerId}}",
+                        "preferences"
+                    ]
+                },
+                "description": "The API may only claim customer_requested or manual_opt_out.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"isOptedOut\": true,\n  \"reason\": \"bounce\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 400 with VALIDATION_ERROR', () => {",
+                            "  pm.expect(pm.response.code).to.eql(400);",
+                            "  pm.expect(pm.response.json().error.code).to.eql('VALIDATION_ERROR');",
+                            "  pm.expect(pm.response.json().error.details.field).to.eql('reason');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /audit-logs — first page",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/audit-logs?limit=2",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "audit-logs"
+                    ],
+                    "query": [
+                        {
+                            "key": "limit",
+                            "value": "2"
+                        }
+                    ]
+                },
+                "description": "Keyset page, newest first. The test stores nextCursor in a collection variable for the next request."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('page carries the keyset envelope', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.data).to.be.an('array');",
+                            "  pm.expect(b).to.have.property('nextCursor');",
+                            "  if (b.nextCursor) pm.collectionVariables.set('auditCursor', b.nextCursor);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /audit-logs — next page",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/audit-logs?limit=2&cursor={{auditCursor}}",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "audit-logs"
+                    ],
+                    "query": [
+                        {
+                            "key": "limit",
+                            "value": "2"
+                        },
+                        {
+                            "key": "cursor",
+                            "value": "{{auditCursor}}"
+                        }
+                    ]
+                },
+                "description": "Uses {{auditCursor}} captured by the previous request; skip when the trail has one page."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200 or 400 when there is no cursor yet', () => {",
+                            "  pm.expect([200, 400]).to.include(pm.response.code);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /audit-logs — customer_preference filter",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/audit-logs?entityType=customer_preference",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "audit-logs"
+                    ],
+                    "query": [
+                        {
+                            "key": "entityType",
+                            "value": "customer_preference"
+                        }
+                    ]
+                },
+                "description": "Filter by the entity type the preference endpoints write."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('every row is a customer_preference entry', () => {",
+                            "  const b = pm.response.json();",
+                            "  b.data.forEach((row) => pm.expect(row.entityType).to.eql('customer_preference'));",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /audit-logs — 400 unknown entityType",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/audit-logs?entityType=invoice",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "audit-logs"
+                    ],
+                    "query": [
+                        {
+                            "key": "entityType",
+                            "value": "invoice"
+                        }
+                    ]
+                },
+                "description": "The filter mirrors the audit_logs.entity_type CHECK."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 400 with field entityType', () => {",
+                            "  pm.expect(pm.response.code).to.eql(400);",
+                            "  pm.expect(pm.response.json().error.details.field).to.eql('entityType');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
