@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-auth stack (ADR-0004). Cognito user pool, hosted-UI domain and the
+  web app client used by both the frontend (#9) and the API Gateway JWT
+  authorizer in csep-api. Public SPA client: PKCE authorization-code
+  flow (no client secret), refresh-token rotation and explicit token
+  revocation enabled per ADR-0004.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  FrontendOrigin:
+    Type: String
+    Description: Deployed frontend origin used as hosted-UI callback and sign-out URL
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
+    ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
+Conditions:
+  AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub csep-users-${EnvironmentName}
+      # Users sign in with their email; no separate username to remember.
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      # Teammates and demo users self-register; switch to admin-only
+      # creation if the graded demo needs a closed user list.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  # Hosted UI so the frontend (#9) does not implement login screens
+  # against Cognito directly — hosted domain handles sign-in, PKCE
+  # redirect and logout.
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "csep-${AWS::AccountId}-${EnvironmentName}" # globally unique prefix
+      UserPoolId: !Ref UserPool
+
+  WebAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: csep-web
+      # Public client (no secret) — SPA + PKCE. The client secret
+      # cannot be safely stored in a browser bundle.
+      GenerateSecret: false
+      # SRP sign-in stays for direct SDK use; ALLOW_REFRESH_TOKEN_AUTH is
+      # removed because refresh-token rotation is incompatible with the
+      # REFRESH_TOKEN_AUTH flow — the SPA refreshes via the hosted-UI
+      # oauth2/token refresh_token grant instead.
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code # authorization-code + PKCE
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs: !If
+        - AllowLocalhost
+        - [!Ref FrontendOrigin, "http://localhost:5173"]
+        - [!Ref FrontendOrigin]
+      LogoutURLs: !If
+        - AllowLocalhost
+        - [!Ref FrontendOrigin, "http://localhost:5173"]
+        - [!Ref FrontendOrigin]
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      # Explicit per ADR-0004: issued tokens can be revoked via the
+      # API (e.g., on logout), not left valid until expiry.
+      EnableTokenRevocation: true
+      # Explicit per ADR-0004 ("PKCE, rotation, revocation"): each token
+      # refresh returns a new refresh token, valid only for the remainder
+      # of the original RefreshTokenValidity window.
+      RefreshTokenRotation:
+        Feature: ENABLED
+      # Return a generic error for wrong-username attempts instead of
+      # revealing which accounts exist.
+      PreventUserExistenceErrors: ENABLED
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+    Export:
+      Name: csep-auth-UserPoolId
+  UserPoolClientId:
+    Description: Audience expected by the csep-api JWT authorizer
+    Value: !Ref WebAppClient
+    Export:
+      Name: csep-auth-UserPoolClientId
+  CognitoIssuer:
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+    Export:
+      Name: csep-auth-CognitoIssuer
+  HostedUiDomain:
+    Description: Cognito hosted login domain base URL for the frontend
+    Value: !Sub "https://csep-${AWS::AccountId}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
+    Export:
+      Name: csep-auth-HostedUiDomain

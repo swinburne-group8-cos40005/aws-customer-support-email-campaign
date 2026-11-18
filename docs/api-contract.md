@@ -1,9 +1,9 @@
 # REST API Specification & Contract
 
-- **Version:** 1.0.0
+- **Version:** 1.1.0
 - **Author:** Quang Thinh (Backend API & Database Lead)
 - **Reviewer / Aligned with:** Trong Hieu (Frontend Lead)
-- **Status:** Approved / Frozen for Sprint 1
+- **Status:** Approved for Sprint 1 — v1.0 frozen for endpoint shapes; v1.1 adds auth clarification and data-access conventions (issues #21, #22)
 - **Base URL:** `https://api.campaign.internal/v1`
 
 ---
@@ -11,11 +11,13 @@
 ## 1. Global Conventions & Standards
 
 ### 1.1 Authentication & Authorization
-All mutating endpoints require an Amazon Cognito JSON Web Token (JWT) passed in the `Authorization` header:
+**All endpoints — reads and mutations alike — require an Amazon Cognito JSON Web Token (JWT)** passed in the `Authorization` header:
 ```http
 Authorization: Bearer <cognito_id_token>
 ```
-The backend extracts the user's unique identity (`sub`), email, and roles directly from the verified claims.
+- The token is **validated by the API Gateway JWT authorizer** before any Lambda runs; unauthenticated requests are rejected with `401` at the gateway and never invoke backend code.
+- Lambdas **only read the verified claims** (`sub`, email, groups). They do not re-verify signatures and do not call Cognito per request.
+- The Cognito user pool and app client are provisioned by the `csep-auth` stack (ADR-0004); the authorizer in `infra/api.yaml` is configured from that stack's outputs.
 
 ### 1.2 Common Request & Response Format
 - **Content-Type:** `application/json`
@@ -36,6 +38,21 @@ All error responses (HTTP 4xx and 5xx) must follow this consistent envelope:
   }
 }
 ```
+
+### 1.4 Data Access Path
+API Lambdas never connect to Aurora directly. The access path is:
+```
+Lambda (`csep_app`) ──IAM auth token (~15 min)──▶ RDS Proxy ──app-user Secrets Manager credential──▶ Aurora PostgreSQL (Serverless v2)
+```
+- Settled in ADR-0005 (RDS Proxy + `pg` driver over the Postgres wire protocol; the Aurora Data API is rejected) and issue #22 (IAM token auth in front of the Proxy, Secrets Manager behind it).
+- Lambdas hold **no database password**: each Lambda signs a short-lived IAM token with its execution role (`rds-db:connect` scoped to the Proxy's `csep_app` database user). The Proxy authenticates to Aurora with the dedicated app user's credential stored in Secrets Manager; the Lambda cannot authenticate as the master user.
+- All writes run in a single transaction that also inserts the audit row (see `docs/audit-log-strategy.md`), so a failed mutation leaves no partial state.
+- Transient database unavailability surfaces as `503` with code `DB_UNAVAILABLE` in the standard error envelope; clients should retry with backoff rather than re-submit blindly.
+
+### 1.5 Deployment & Infrastructure
+- Infrastructure is AWS CloudFormation (ADR-0004), templates in `infra/`. Deploy order for this contract: `csep-auth` → `csep-data` (Aurora + RDS Proxy) → `csep-api` (HTTP API + JWT authorizer + Lambdas).
+- Stacks cross-reference via `Fn::ImportValue` outputs; no manual console changes to shared stacks — drift means the template is wrong, not the console.
+- Schema is applied from `db/schema.sql` through a one-off SSM-managed host with temporary direct cluster access; its security-group ingress is removed after bootstrap. Schema is never created or edited by hand in the console.
 
 ---
 
