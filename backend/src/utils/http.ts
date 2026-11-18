@@ -69,3 +69,20 @@ export const buildErrorResponse = (
 
     return _buildJsonResponse(statusCode, { error });
 };
+
+/**
+ * 204 response for DELETE endpoints — RFC 9110 forbids a body on 204, so
+ * this returns status and headers only.
+ *
+ * @returns A complete APIGatewayProxyResult with an empty body.
+ *
+ * @example
+ * const response = buildNoContentResponse()
+ * console.log(response.statusCode) // Output: 204
+ * console.log(response.body)       // Output: ''
+ */
+export const buildNoContentResponse = (): APIGatewayProxyResult => ({
+    statusCode: 204,
+    headers: {},
+    body: '',
+});

@@ -41,3 +41,14 @@ export class UnauthorizedError extends ApiError {
         super(401, 'UNAUTHORIZED', 'A valid Cognito ID token is required.');
     }
 }
+
+/**
+ * 409 — the resource exists but its current state forbids the requested
+ * transition (e.g. editing a campaign that is no longer a draft). The
+ * allowed transitions live in docs/email-state-machine.md §1.2.
+ */
+export class ConflictError extends ApiError {
+    constructor(message: string, details?: Record<string, unknown>) {
+        super(409, 'CONFLICT', message, details);
+    }
+}

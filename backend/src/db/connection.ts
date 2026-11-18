@@ -95,6 +95,30 @@ export const getDatabasePool = (): Pool => {
 };
 
 /**
+ * Read helper for GET endpoints: runs one statement on the shared pool
+ * and returns the same narrow QueryResult repositories already speak.
+ * No transaction — reads never need BEGIN/COMMIT and the Proxy pools
+ * the real connections (ADR-0005).
+ *
+ * @param text - SQL statement with $1..$n placeholders.
+ * @param values - Positional values for those placeholders.
+ *
+ * @returns Rows and affected-row count exactly as the driver reports them.
+ *
+ * @example
+ * const result = await runReadQuery('SELECT COUNT(*) AS count FROM campaigns')
+ * console.log(Number(result.rows[0].count)) // Output: 12
+ */
+export const runReadQuery = async (text: string, values?: unknown[]): Promise<QueryResult> => {
+    const result = await getDatabasePool().query(text, values);
+
+    return {
+        rows: result.rows as Row[],
+        rowCount: result.rowCount,
+    };
+};
+
+/**
  * Closes the pool and forgets it, so the next getDatabasePool call
  * builds a fresh one. Used by integration tests between scenarios.
  *
