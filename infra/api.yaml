@@ -1387,6 +1387,103 @@ Resources:
       StageName: "$default"
       AutoDeploy: true
 
+  WorkerLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub csep-worker-lambda-role-${EnvironmentName}
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        Policies:
+          - PolicyName: CsepWorkerPolicy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                # Scope IAM auth to the Proxy's dedicated application database user (ADR-0005/0006)
+                - Sid: RdsProxyIamConnect
+                  Effect: Allow
+                  Action: rds-db:connect
+                  Resource:
+                    - Fn::ImportValue: csep-data-DBProxyUserArn
+
+                # Consume jobs from the Main SQS Queue
+                - Sid: MainQueueConsume
+                  Effect: Allow
+                  Action:
+                    - sqs:ReceiveMessage
+                    - sqs:DeleteMessage
+                    - sqs:GetQueueAttributes
+                    - sqs:ChangeMessageVisibility
+                  Resource:
+                    Fn::ImportValue: csep-messaging-MainQueueArn
+
+                # Send emails via Amazon SES restricted to the verified domain
+                - Sid: SesSendEmailRestricted
+                  Effect: Allow
+                  Action:
+                    - ses:SendEmail
+                    - ses:SendRawEmail
+                  Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesDomain}
+                  Condition:
+                    StringLike:
+                      ses:FromAddress: !Sub "*@${SesDomain}"
+
+  WorkerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-worker-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: !Ref WorkerHandler
+      MemorySize: 256
+      Timeout: 30
+      Architectures: [arm64]
+      Role: !GetAtt WorkerLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; a placeholder artifact key is acceptable initially.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref WorkerArtifactKey
+      Environment:
+        Variables:
+          # Connection coordinates only — no password anywhere (ADR-0005/0006).
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+          MAIN_QUEUE_URL:
+            Fn::ImportValue: csep-messaging-MainQueueUrl
+          SES_DOMAIN: !Ref SesDomain
+          SES_FROM_EMAIL: !Ref SesFromEmail
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  WorkerQueueEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn:
+        Fn::ImportValue: csep-messaging-MainQueueArn
+      FunctionName: !GetAtt WorkerFunction.Arn
+      Enabled: true
+      BatchSize: !Ref WorkerBatchSize
+      MaximumBatchingWindowInSeconds: 2
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
+      ScalingConfig:
+        MaximumConcurrency: !Ref WorkerMaxConcurrency
+
 Outputs:
   ApiEndpoint:
     Description: Invoke URL for the default stage
@@ -1415,3 +1512,13 @@ Outputs:
     Value: !GetAtt CreateCampaignFunction.Arn
     Export:
       Name: csep-api-CreateCampaignFunctionArn
+  WorkerFunctionArn:
+    Description: ARN of the Worker Lambda function
+    Value: !GetAtt WorkerFunction.Arn
+    Export:
+      Name: csep-api-WorkerFunctionArn
+  WorkerLambdaRoleArn:
+    Description: ARN of the Worker Lambda IAM execution role
+    Value: !GetAtt WorkerLambdaRole.Arn
+    Export:
+      Name: csep-api-WorkerLambdaRoleArn
