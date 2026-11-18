@@ -46,6 +46,8 @@ const row = (): CampaignRow => ({
     template_id: TEMPLATE_ID,
     segment_id: SEGMENT_ID,
     status: 'draft',
+    dispatch_mode: 'scheduled',
+    scheduled_at: null,
     created_by: 'usr-agent-1',
     created_at: '2026-11-11T03:00:00.000Z',
     updated_at: '2026-11-11T03:00:00.000Z',
