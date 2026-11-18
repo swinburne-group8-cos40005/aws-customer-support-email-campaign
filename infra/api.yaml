@@ -38,6 +38,19 @@ Parameters:
 Conditions:
   AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
+# W6001 (output value imports another stack's output) is expected in
+# FrontendConfig below: the SPA config deliberately assembles the
+# csep-auth exports. The update-ordering dependency it warns about is
+# inherent to cross-stack config here — the same reason FrontendOrigin
+# is a parameter in both stacks rather than an export — and the
+# consumer deploy order (auth before api) is documented in
+# infra/README.md.
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W6001
+
 Resources:
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
@@ -186,6 +199,11 @@ Outputs:
     Value: !Sub
       - '{"cognitoClientId":"${Client}","cognitoDomain":"${Domain}","apiBaseUrl":"${Api}"}'
       - Client:
+          # W6001 warns that imported outputs create an update-ordering
+          # dependency on csep-auth. That is inherent to cross-stack
+          # config here (same reason FrontendOrigin is a parameter in
+          # both stacks) and acceptable: csep-auth's exports change only
+          # with the stacks that consume them.
           Fn::ImportValue: csep-auth-UserPoolClientId
         Domain:
           Fn::ImportValue: csep-auth-HostedUiDomain
