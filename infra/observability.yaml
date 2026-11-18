@@ -1,3 +1,23 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  CSEP Campaign Health Dashboard (issue #28 - standalone lintable draft).
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+  ApiId:
+    Type: String
+    Default: PLACEHOLDER_API_ID
+  MainQueueName:
+    Type: String
+    Default: PLACEHOLDER_MAIN_QUEUE
+  DeadLetterQueueName:
+    Type: String
+    Default: PLACEHOLDER_DLQ_NAME
+
+Resources:
+
   # BACH TUNG'S SECTION
   # CLOUDWATCH DASHBOARD (issue #28)
   # One dashboard that shows campaign health: emails sent / delivered /
