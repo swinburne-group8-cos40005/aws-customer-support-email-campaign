@@ -1,0 +1,375 @@
+{
+    "info": {
+        "name": "Campaign API — Issue #32 (templates and segments)",
+        "description": "Smoke tests for /templates and /segments (issue #32, endpoint group 2/3). Set {{baseUrl}}, {{cognitoIdToken}}, {{templateId}} and {{segmentId}} (seed values: 22222222-2222-4000-8000-000000000001 and 11111111-1111-4000-8000-000000000001).",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "http://localhost:3000"
+        },
+        {
+            "key": "cognitoIdToken",
+            "value": "<paste-cognito-id-token>"
+        },
+        {
+            "key": "templateId",
+            "value": "22222222-2222-4000-8000-000000000001"
+        },
+        {
+            "key": "segmentId",
+            "value": "11111111-1111-4000-8000-000000000001"
+        }
+    ],
+    "item": [
+        {
+            "name": "GET /templates",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/templates",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "templates"
+                    ]
+                },
+                "description": "Lists every template (docs/api-contract.md §2.2)."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('data is an array of templates', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.data).to.be.an('array');",
+                            "  if (b.data.length) pm.expect(b.data[0]).to.have.property('templateId');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "POST /templates",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/templates",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "templates"
+                    ]
+                },
+                "description": "Creates a template and its create audit row.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"Black Friday Reminder\",\n  \"subjectTemplate\": \"Last chance: {{offer}}\",\n  \"bodyHtml\": \"<p>Hello {{firstName}}</p>\",\n  \"bodyText\": \"Hello {{firstName}}\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                            "pm.test('body is camelCase', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b).to.have.all.keys('templateId','name','subjectTemplate','bodyHtml','bodyText','createdAt','updatedAt');",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /templates/{id}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/templates/{{templateId}}",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "templates",
+                        "{{templateId}}"
+                    ]
+                },
+                "description": "Retrieves one template by UUID."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "PUT /templates/{id}",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/templates/{{templateId}}",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "templates",
+                        "{{templateId}}"
+                    ]
+                },
+                "description": "Partial update; emits an update audit row.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"subjectTemplate\": \"Last chance: Black Friday\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('subject changed', () => pm.expect(pm.response.json().subjectTemplate).to.eql('Last chance: Black Friday'));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "DELETE /templates/{id}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/templates/{{templateId}}",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "templates",
+                        "{{templateId}}"
+                    ]
+                },
+                "description": "Deletes an unused template. Seeded templates are referenced by campaigns, so 409 is the expected answer for them; point {{templateId}} at one you created to see 204."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 204 or 409 when still referenced', () => {",
+                            "  pm.expect([204, 409]).to.include(pm.response.code);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "GET /segments",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/segments",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "segments"
+                    ]
+                },
+                "description": "Lists every audience segment."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "POST /segments",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/segments",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "segments"
+                    ]
+                },
+                "description": "Creates a segment from its filter rules.",
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"Gold Customers in Hanoi\",\n  \"description\": \"Loyalty tier gold, city Hanoi\",\n  \"rules\": {\n    \"city\": \"Hanoi\",\n    \"tier\": \"gold\"\n  }\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                            "pm.test('rules round-trip as JSON', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.rules).to.eql({ city: 'Hanoi', tier: 'gold' });",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "POST /segments/{id}/preview",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{cognitoIdToken}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{baseUrl}}/segments/{{segmentId}}/preview",
+                    "host": [
+                        "{{baseUrl}}"
+                    ],
+                    "path": [
+                        "segments",
+                        "{{segmentId}}",
+                        "preview"
+                    ]
+                },
+                "description": "Audience preview: estimatedRecipients - suppressedExcluded = netAudience."
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                            "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                            "pm.test('netAudience is the subtraction', () => {",
+                            "  const b = pm.response.json();",
+                            "  pm.expect(b.netAudience).to.eql(b.estimatedRecipients - b.suppressedExcluded);",
+                            "});"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
