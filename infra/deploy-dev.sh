@@ -5,10 +5,16 @@
 #   VPC_ID=vpc-... SUBNET_IDS=subnet-a,subnet-b ./infra/deploy-dev.sh
 #   FRONTEND_ORIGIN=https://dev.example.com VPC_ID=... ./infra/deploy-dev.sh
 #
-# Deploys every template that exists in infra/ and skips the rest with a
-# message (messaging.yaml and observability.yaml land with their own
-# checkpoints). CloudFormation deploys are idempotent: re-running applies
-# only the difference.
+# Optional inputs unlock the stacks that are not needed for the API pass:
+#   ARTIFACT_KEY=api.zip                     csep-api
+#   DISPATCHER_ARTIFACT_KEY=dispatcher.zip   csep-dispatcher (#26)
+#   EVENT_HANDLER_ARTIFACT_KEY=events.zip    csep-feedback (#26)
+#   SNS_TOPIC_ARN=arn:aws:sns:...            csep-feedback (#29 publishes here)
+#   API_ID=abc123 MANAGER_EMAIL=ops@example  csep-observability (#27/#28)
+#
+# Stacks whose inputs are missing are skipped with a message, so the script
+# is safe to run before every bundle is built. CloudFormation deploys are
+# idempotent: re-running applies only the difference.
 #
 # No console changes (ADR-0004 drift policy). The schema bootstrap is NOT
 # performed here: it needs the temporary SSM tunnel described in
@@ -80,18 +86,51 @@ else
     echo "── Skipping csep-api (ARTIFACT_KEY not set) ──"
 fi
 
-# 5. Messaging + observability — templates arrive with the #26 / #27
-#    checkpoints; deploy them automatically once they exist.
-for stack in csep-messaging csep-observability; do
-    template="${TEMPLATE_DIR}/${stack#csep-}.yaml"
-    if [ -f "$template" ]; then
-        deploy_stack "$stack" \
-            --capabilities CAPABILITY_IAM \
-            --parameter-overrides "EnvironmentName=${ENV_NAME}"
-    else
-        echo "── Skipping ${stack} (${template} not present yet) ──"
-    fi
-done
+# 5. Dispatcher — the send queue, Scheduler and Dispatcher Lambda (#26).
+if [ -f "${TEMPLATE_DIR}/dispatcher.yaml" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
+    deploy_stack csep-dispatcher \
+        --capabilities CAPABILITY_IAM \
+        --parameter-overrides \
+            "EnvironmentName=${ENV_NAME}" \
+            "DispatcherArtifactKey=${DISPATCHER_ARTIFACT_KEY}" \
+            "SubnetIds=${SUBNET_IDS}" \
+            "VpcId=${VPC_ID}"
+else
+    echo "── Skipping csep-dispatcher (DISPATCHER_ARTIFACT_KEY not set or template missing) ──"
+fi
+
+# 6. Feedback — the SES event queue and Event Handler (#26). The SNS topic
+#    belongs to the email-sending stack (#29) and arrives as an input.
+if [ -f "${TEMPLATE_DIR}/feedback.yaml" ] \
+    && [ -n "${EVENT_HANDLER_ARTIFACT_KEY:-}" ] \
+    && [ -n "${SNS_TOPIC_ARN:-}" ]; then
+    deploy_stack csep-feedback \
+        --capabilities CAPABILITY_IAM \
+        --parameter-overrides \
+            "EnvironmentName=${ENV_NAME}" \
+            "ArtifactKey=${EVENT_HANDLER_ARTIFACT_KEY}" \
+            "SnsTopicArn=${SNS_TOPIC_ARN}" \
+            "SubnetIds=${SUBNET_IDS}" \
+            "VpcId=${VPC_ID}"
+else
+    echo "── Skipping csep-feedback (EVENT_HANDLER_ARTIFACT_KEY and SNS_TOPIC_ARN required) ──"
+fi
+
+# 7. Observability — log groups, metric filters, alarms and dashboards
+#    (#27, #28). ApiId and the manager email identify the alarm targets.
+if [ -f "${TEMPLATE_DIR}/observability.yaml" ] \
+    && [ -n "${API_ID:-}" ] \
+    && [ -n "${MANAGER_EMAIL:-}" ]; then
+    deploy_stack csep-observability \
+        --parameter-overrides \
+            "EnvironmentName=${ENV_NAME}" \
+            "ManagerEmail=${MANAGER_EMAIL}" \
+            "ApiId=${API_ID}" \
+            "MainQueueName=csep-send-queue-${ENV_NAME}" \
+            "DeadLetterQueueName=csep-send-dlq-${ENV_NAME}"
+else
+    echo "── Skipping csep-observability (API_ID and MANAGER_EMAIL required) ──"
+fi
 
 echo
 echo "Deploy pass complete. Record the results in"

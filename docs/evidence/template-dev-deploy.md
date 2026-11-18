@@ -53,7 +53,7 @@ UNION ALL SELECT 'email_logs', COUNT(*) FROM email_logs;
 | :--- | :--- | :--- |
 | Exports resolve | `aws cloudformation list-exports --query 'Exports[?starts_with(Name, \`csep-\`)].Name'` | `<output>` |
 | Lambda reaches Proxy | invoke `GET <ApiEndpoint>/health` (or the next available route); expected status `<status>` | `<output>` |
-| Queue + DLQ exports (once messaging lands) | `aws sqs get-queue-attributes --queue-url <url> --attribute-names QueueArn` | `<output>` |
+| Queue + DLQ exports (once the dispatcher stack lands) | `aws sqs get-queue-attributes --queue-url <url> --attribute-names QueueArn` | `<output>` |
 
 ## Notes
 
