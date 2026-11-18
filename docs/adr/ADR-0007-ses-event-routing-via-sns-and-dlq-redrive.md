@@ -10,7 +10,7 @@
 
 ## Context
 
-ADR-0002 fixed the dispatch pipeline (EventBridge Scheduler → Dispatcher Lambda → SQS → Worker Lambda) and ADR-0004 named the stack layout (`messaging.yaml` = "SNS topic, SES event destinations"), but neither recorded **how SES sending events travel back** once an email has been handed to SES. The Event Handler Lambda (#10) needs Delivery / Bounce / Complaint events to move `email_logs` rows from `sent` to `delivered` / `bounced` / `complained` — the decision was how they reach the processing queue:
+ADR-0002 fixed the dispatch pipeline (EventBridge Scheduler → Dispatcher Lambda → SQS → Worker Lambda) and ADR-0004 named the stack layout (`dispatcher.yaml` = scheduler + send queue, `feedback.yaml` = feedback queue + Event Handler), but neither recorded **how SES sending events travel back** once an email has been handed to SES. The Event Handler Lambda (#10) needs Delivery / Bounce / Complaint events to move `email_logs` rows from `sent` to `delivered` / `bounced` / `complained` — the decision was how they reach the processing queue:
 
 - **Option A — SES → SNS topic → SQS.** SES event destinations publish to one SNS topic; the topic fans out to the event-processing SQS queue (and any later consumer).
 - **Option B — SES event destination → SQS directly.** SES writes straight to the queue: fewer hops, but the consumer set is frozen at SES-config time.
@@ -20,7 +20,7 @@ The same decision thread also had to fix the main send queue's DLQ behaviour: ho
 ## Decision
 
 1. **Option A — SES → SNS topic → SQS** (unanimous).
-   - One SES event destination (a configuration set) publishes Delivery / Bounce / Complaint to a single SNS topic in `csep-messaging`.
+   - One SES event destination (a configuration set) publishes Delivery / Bounce / Complaint to a single SNS topic created by the email-sending stack (SES configuration set and topic are owned by the Worker/sending checkpoint #29).
    - The event-processing SQS queue subscribes to that topic; the Event Handler Lambda consumes the queue and **unwraps the SNS envelope** before matching events to `email_logs` rows via `ses_message_id`.
    - Rationale: keeps the layout that ADR-0004 already documents, and leaves the door open for future subscribers (audit-log pipeline, alerting) without ever re-touching SES configuration.
 
@@ -30,7 +30,7 @@ The same decision thread also had to fix the main send queue's DLQ behaviour: ho
 
 3. **Main queue visibility timeout: at least 6× the Worker Lambda timeout, plus the batching window.**
    - A message must stay invisible for the full worst-case processing time — Lambda timeout, batching, and margin — so a message cannot reappear while a Worker is still mid-send. This bounds the at-least-once redelivery window that the Worker's idempotency key (ADR-0002) has to absorb.
-   - `messaging.yaml` (checkpoint #26) encodes both numbers as the Worker timeout is set there.
+   - `infra/dispatcher.yaml` (checkpoint #26) encodes both numbers; the Worker timeout lives in the sending stack (#29).
 
 4. **DLQ disposition is manual.** Messages that land in the DLQ are inspected by hand before any redrive — the `failed` email_logs rows carry `last_error` for the investigation.
 
