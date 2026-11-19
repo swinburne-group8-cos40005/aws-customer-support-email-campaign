@@ -177,6 +177,502 @@ Resources:
           AccountId: !Ref AWS::AccountId
           ApiId: !Ref HttpApi
 
+  ListCampaignsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-list-campaigns-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: list-campaigns.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ListCampaignsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ListCampaignsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ListCampaignsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/campaigns"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ListCampaignsIntegration}"
+
+  ListCampaignsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ListCampaignsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/campaigns"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  GetCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-get-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: get-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  GetCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt GetCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  GetCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/campaigns/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${GetCampaignIntegration}"
+
+  GetCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  UpdateCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-update-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: update-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  UpdateCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt UpdateCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  UpdateCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "PUT /v1/campaigns/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${UpdateCampaignIntegration}"
+
+  UpdateCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/PUT/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  DeleteCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-delete-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: delete-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  DeleteCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt DeleteCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  DeleteCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "DELETE /v1/campaigns/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${DeleteCampaignIntegration}"
+
+  DeleteCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/DELETE/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  ScheduleCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-schedule-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: schedule-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ScheduleCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ScheduleCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ScheduleCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/campaigns/{id}/schedule"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ScheduleCampaignIntegration}"
+
+  ScheduleCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ScheduleCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  SendCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-send-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: send-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  SendCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt SendCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  SendCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/campaigns/{id}/send"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${SendCampaignIntegration}"
+
+  SendCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SendCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  CancelCampaignFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-cancel-campaign-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: cancel-campaign.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  CancelCampaignIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt CancelCampaignFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  CancelCampaignRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/campaigns/{id}/cancel"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${CancelCampaignIntegration}"
+
+  CancelCampaignInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CancelCampaignFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  ListCampaignLogsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-list-campaign-logs-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: list-campaign-logs.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ListCampaignLogsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ListCampaignLogsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ListCampaignLogsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/campaigns/{id}/logs"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ListCampaignLogsIntegration}"
+
+  ListCampaignLogsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ListCampaignLogsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/campaigns/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:

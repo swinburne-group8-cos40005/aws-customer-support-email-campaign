@@ -5,7 +5,15 @@ import type { Queryable } from '#db/connection';
 
 export interface AuditEntry {
     userId: string;
-    action: 'create' | 'update' | 'cancel' | 'send' | 'opt_in' | 'opt_out';
+    action:
+        | 'create'
+        | 'update'
+        | 'delete'
+        | 'schedule'
+        | 'send'
+        | 'cancel'
+        | 'opt_in'
+        | 'opt_out';
     entityType: string;
     entityId: string;
     /** Full before/after snapshot per docs/audit-log-strategy.md §4. */
