@@ -123,7 +123,6 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
-    ArtifactBucket=<bucket> \
     ArtifactKey=<key> \
     SubnetIds=<subnet-a>,<subnet-b> \
     VpcId=<vpc-id>
