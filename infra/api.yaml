@@ -11,9 +11,6 @@ Parameters:
     Type: String
     Default: dev
     AllowedValues: [dev, staging, prod]
-  ArtifactBucket:
-    Type: String
-    Description: S3 bucket holding the packaged backend Lambda bundle
   ArtifactKey:
     Type: String
     Description: S3 key of the packaged backend Lambda bundle
@@ -29,6 +26,27 @@ Parameters:
   DbPort:
     Type: Number
     Default: 5432
+  FrontendOrigin:
+    Type: String
+    Description: Deployed frontend origin allowed by CORS (https only, no path or trailing slash)
+    AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
+    ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
+
+Conditions:
+  AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
+
+# W6001 (output value imports another stack's output) is expected in
+# FrontendConfig below: the SPA config deliberately assembles the
+# csep-auth exports. The update-ordering dependency it warns about is
+# inherent to cross-stack config here — the same reason FrontendOrigin
+# is a parameter in both stacks rather than an export — and the
+# consumer deploy order (auth before api) is documented in
+# infra/README.md.
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W6001
 
 Resources:
   HttpApi:
@@ -37,7 +55,10 @@ Resources:
       Name: !Sub csep-api-${EnvironmentName}
       ProtocolType: HTTP
       CorsConfiguration:
-        AllowOrigins: ["*"] # tighten to the frontend origin before public exposure
+        AllowOrigins: !If
+          - AllowLocalhost
+          - [!Ref FrontendOrigin, "http://localhost:5173"]
+          - [!Ref FrontendOrigin]
         AllowMethods: [GET, POST, PUT, DELETE]
         AllowHeaders: [Authorization, Content-Type]
         MaxAge: 86400
@@ -95,14 +116,17 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub csep-create-campaign-${EnvironmentName}
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: !Ref Handler
       MemorySize: 256
       Timeout: 10
       Architectures: [arm64]
       Role: !GetAtt ApiLambdaRole.Arn
       Code:
-        S3Bucket: !Ref ArtifactBucket
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
         S3Key: !Ref ArtifactKey
       Environment:
         Variables:
@@ -166,6 +190,24 @@ Outputs:
     Value: !GetAtt HttpApi.ApiEndpoint
     Export:
       Name: csep-api-ApiEndpoint
+  # Single runtime-config object for the SPA (#9): read via DescribeStacks
+  # at boot instead of assembling three separate exports. Fn::ImportValue
+  # values feed the Fn::Sub map because Fn::Sub cannot resolve import
+  # names directly.
+  FrontendConfig:
+    Description: Runtime config for the SPA — cognitoClientId, cognitoDomain, apiBaseUrl
+    Value: !Sub
+      - '{"cognitoClientId":"${Client}","cognitoDomain":"${Domain}","apiBaseUrl":"${Api}"}'
+      - Client:
+          # W6001 warns that imported outputs create an update-ordering
+          # dependency on csep-auth. That is inherent to cross-stack
+          # config here (same reason FrontendOrigin is a parameter in
+          # both stacks) and acceptable: csep-auth's exports change only
+          # with the stacks that consume them.
+          Fn::ImportValue: csep-auth-UserPoolClientId
+        Domain:
+          Fn::ImportValue: csep-auth-HostedUiDomain
+        Api: !GetAtt HttpApi.ApiEndpoint
   CreateCampaignFunctionArn:
     Value: !GetAtt CreateCampaignFunction.Arn
     Export:
