@@ -50,7 +50,7 @@ Lambda (`csep_app`) ──IAM auth token (~15 min)──▶ RDS Proxy ──app-
 - Transient database unavailability surfaces as `503` with code `DB_UNAVAILABLE` in the standard error envelope; clients should retry with backoff rather than re-submit blindly.
 
 ### 1.5 Deployment & Infrastructure
-- Infrastructure is AWS CloudFormation (ADR-0004), templates in `infra/`. Deploy order for this contract: `csep-auth` → `csep-data` (Aurora + RDS Proxy) → `csep-api` (HTTP API + JWT authorizer + Lambdas).
+- Infrastructure is AWS CloudFormation (ADR-0004), templates in `infra/`. Deploy order for this contract: `csep-artifact` (S3 bucket for packaged Lambda code) → `csep-auth` → `csep-data` (Aurora + RDS Proxy) → `csep-api` (HTTP API + JWT authorizer + Lambdas).
 - Stacks cross-reference via `Fn::ImportValue` outputs; no manual console changes to shared stacks — drift means the template is wrong, not the console.
 - Schema is applied from `db/schema.sql` through a one-off SSM-managed host with temporary direct cluster access; its security-group ingress is removed after bootstrap. Schema is never created or edited by hand in the console.
 
