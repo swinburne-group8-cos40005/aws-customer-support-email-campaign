@@ -1,8 +1,9 @@
 # Campaign API backend
 
-TypeScript Lambdas backing the `/campaigns` endpoints (docs/api-contract.md
-§2.1). The handler monolith was rewritten into horizontal layers so every
-endpoint is added by following the same seams.
+TypeScript Lambdas backing the campaign, template, segment, preference and
+audit-log endpoints (docs/api-contract.md §2.1–§2.5). The handler monolith was
+rewritten into horizontal layers so every endpoint is added by following the
+same seams.
 
 ## Architecture
 
@@ -72,6 +73,9 @@ each function to its exported handler name.
 | `GET /v1/segments` | `list-segments.handler` | `handleListSegmentsRequest` |
 | `POST /v1/segments` | `create-segment.handler` | `handleCreateSegmentRequest` |
 | `POST /v1/segments/{id}/preview` | `preview-segment.handler` | `handlePreviewSegmentRequest` |
+| `GET /v1/customers/{id}/preferences` | `get-customer-preferences.handler` | `handleGetCustomerPreferencesRequest` |
+| `PUT /v1/customers/{id}/preferences` | `update-customer-preferences.handler` | `handleUpdateCustomerPreferencesRequest` |
+| `GET /v1/audit-logs` | `list-audit-logs.handler` | `handleListAuditLogsRequest` |
 
 State transitions follow `docs/email-state-machine.md`; the dispatcher
 invocation itself belongs to the messaging stack (#26/#47), so `/send` owns
