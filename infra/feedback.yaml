@@ -1,0 +1,180 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-feedback stack (ADR-0004). Provisions the feedback SQS queue
+  subscribed to an externally managed SNS topic, and the EventHandler
+  Lambda that records those events in the application database.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  ArtifactKey:
+    Type: String
+    Description: S3 key of the packaged EventHandler Lambda bundle
+  Handler:
+    Type: String
+    Default: event-handler.handler
+    Description: Exported handler of the EventHandler Lambda
+  SnsTopicArn:
+    Type: String
+    Description: ARN of the SNS topic managed by the separate email-sending stack
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for the EventHandler Lambda VPC attachment
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  DbPort:
+    Type: Number
+    Default: 5432
+  QueueVisibilityTimeout:
+    Type: Number
+    Default: 180
+    MinValue: 0
+    MaxValue: 43200
+    Description: SQS visibility timeout in seconds for EventHandler processing
+
+Resources:
+  FeedbackDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub csep-feedback-dlq-${EnvironmentName}
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  FeedbackQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub csep-feedback-queue-${EnvironmentName}
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: !Ref QueueVisibilityTimeout
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeedbackDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  FeedbackQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref FeedbackQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowFeedbackTopicToSend
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt FeedbackQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SnsTopicArn
+
+  FeedbackSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn: FeedbackQueuePolicy
+    Properties:
+      TopicArn: !Ref SnsTopicArn
+      Protocol: sqs
+      Endpoint: !GetAtt FeedbackQueue.Arn
+
+  EventHandlerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub csep-event-handler-egress-${EnvironmentName}
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  EventHandlerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-event-handler-lambda-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: CsepEventHandlerAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ConsumeFeedbackQueue
+                Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                Resource: !GetAtt FeedbackQueue.Arn
+              - Sid: ConnectToApplicationDatabase
+                Effect: Allow
+                Action: rds-db:connect
+                Resource:
+                  - Fn::ImportValue: csep-data-DBProxyUserArn
+
+  EventHandlerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-event-handler-${EnvironmentName}
+      Runtime: nodejs22.x
+      Handler: !Ref Handler
+      MemorySize: 256
+      Timeout: 30
+      Architectures: [arm64]
+      Role: !GetAtt EventHandlerLambdaRole.Arn
+      Code:
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt EventHandlerSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  EventHandlerQueueEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt FeedbackQueue.Arn
+      FunctionName: !GetAtt EventHandlerLambda.Arn
+      BatchSize: 10
+      Enabled: true
+
+Outputs:
+  FeedbackQueueUrl:
+    Description: URL of the queue consumed by EventHandler
+    Value: !Ref FeedbackQueue
+    Export:
+      Name: csep-feedback-FeedbackQueueUrl
+  FeedbackQueueArn:
+    Description: ARN of the queue consumed by EventHandler
+    Value: !GetAtt FeedbackQueue.Arn
+    Export:
+      Name: csep-feedback-FeedbackQueueArn
+  FeedbackDeadLetterQueueArn:
+    Description: ARN of the feedback dead-letter queue for poisoned SES events
+    Value: !GetAtt FeedbackDeadLetterQueue.Arn
+    Export:
+      Name: csep-feedback-FeedbackDeadLetterQueueArn
+  EventHandlerLambdaArn:
+    Description: ARN of the Lambda processing SES events
+    Value: !GetAtt EventHandlerLambda.Arn
+    Export:
+      Name: csep-feedback-EventHandlerLambdaArn

@@ -1,24 +1,38 @@
 # Infrastructure — CloudFormation Templates
 
-Templates implement ADR-0004 (CloudFormation YAML, five stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and issue #22: Lambda IAM authentication as the dedicated `csep_app` user, with that user's generated password held by Secrets Manager for the Proxy.
+Templates implement ADR-0004 (CloudFormation YAML, stacks named `csep-<concern>`, cross-referenced via `Fn::ImportValue`). DB access follows ADR-0005 (RDS Proxy + `pg`) and issue #22: Lambda IAM authentication as the dedicated `csep_app` user, with that user's generated password held by Secrets Manager for the Proxy.
 
 ## Stack status
 
 | Template | Stack | Contents | Status |
 | :--- | :--- | :--- | :--- |
-| `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | **this PR (draft for review)** |
-| `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | **this PR (draft for review)** |
-| `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | **this PR (draft for review)** |
-| `messaging.yaml` | `csep-messaging` | SQS + DLQ, SNS, SES event destinations, EventBridge Scheduler | pending (issues #6, #7, #10) |
-| `observability.yaml` | `csep-observability` | CloudWatch alarms + dashboards | pending (issue #14) |
+| `artifact.yaml` | `csep-artifact` | S3 bucket holding packaged Lambda bundles (versioned, private) | merged (#31) |
+| `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | merged (#9) |
+| `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | merged (#4) |
+| `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | merged (#5) |
+| `dispatcher.yaml` | `csep-dispatcher` | EventBridge Scheduler, Dispatcher Lambda, send SQS queue + DLQ | this PR (#26) |
+| `feedback.yaml` | `csep-feedback` | Feedback SQS queue + DLQ subscribed to an external SNS topic, EventHandler Lambda | this PR (#26) |
+| `observability.yaml` | `csep-observability` | Log groups, metric filters, alarms, manager alerting and the campaign dashboard | merged (#27, #28) |
 
 ## Deploy order
 
 ```
-csep-auth  →  csep-data  →  schema bootstrap  →  csep-api
+csep-artifact  →  csep-auth  →  csep-data  →  schema bootstrap  →  csep-dispatcher  →  csep-feedback  →  csep-api  →  csep-observability
 ```
 
-### 0. csep-auth
+### 0. csep-artifact
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-artifact \
+  --template-file infra/artifact.yaml \
+  --parameter-overrides \
+    EnvironmentName=dev
+```
+
+`csep-artifact` owns the S3 bucket that stores packaged Lambda bundles. It is deployed first because `csep-api` imports the bucket name rather than receiving it as a deploy parameter. The bucket is disposable: deleting the stack deletes the stored packages, so re-upload a fresh bundle before redeploying `csep-api`. Versioning keeps recent bundles available for rollback; a lifecycle rule expires noncurrent versions after 30 days (ADR-0004 cost control).
+
+### 1. csep-auth
 
 ```sh
 aws cloudformation deploy \
@@ -33,7 +47,7 @@ aws cloudformation deploy \
 
 The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique. The `UserPoolId`, `UserPoolClientId`, and full hosted-login domain URL are exported for the API and frontend.
 
-### 1. csep-data
+### 2. csep-data
 
 ```sh
 aws cloudformation deploy \
@@ -113,10 +127,52 @@ aws cloudformation deploy \
 
    Stop the SSM session, terminate the EC2 instance, and delete its temporary security group. The Proxy is configured only with the `csep_app` secret; the master secret is not available to the Proxy or API Lambda.
 
-### 2. csep-api
+### 2. csep-dispatcher
+
+Upload the Dispatcher Lambda package to S3, then deploy the dispatch
+resources. No Worker or SES resources are created by this stack.
 
 ```sh
-# Package the backend bundle first (built dist uploaded to S3), then:
+aws cloudformation deploy \
+  --stack-name csep-dispatcher \
+  --template-file infra/dispatcher.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    DispatcherArtifactKey=<dispatcher-key> \
+    SubnetIds=<subnet-a>,<subnet-b> \
+    VpcId=<vpc-id>
+```
+
+The Lambda bundle is read from the `csep-artifact` bucket export, so only the
+key varies per deploy. The template creates the send queue and DLQ, and the
+EventBridge Scheduler group and invocation role. Per-campaign schedules are created when scheduling
+is wired into the API; other stacks can import the exported Dispatcher ARN,
+queue values, and Scheduler values.
+
+### 3. csep-feedback
+
+Deploy this stack after `csep-data` has been bootstrapped and the separate
+email-sending stack has created its SNS topic. Pass that topic's ARN as
+`SnsTopicArn`; this template creates only the SQS subscription and queue policy.
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-feedback \
+  --template-file infra/feedback.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    ArtifactKey=<key> \
+    SnsTopicArn=<sns-topic-arn> \
+    SubnetIds=<subnet-a>,<subnet-b> \
+    VpcId=<vpc-id>
+```
+
+### 4. csep-api
+
+```sh
+# Package the backend bundle first (built dist uploaded to the artifact bucket), then:
 aws cloudformation deploy \
   --stack-name csep-api \
   --template-file infra/api.yaml \
@@ -128,7 +184,24 @@ aws cloudformation deploy \
     VpcId=<vpc-id>
 ```
 
-`csep-api` imports the Cognito client ID and issuer, the artifact bucket name, and the database endpoint, name, and username from the other stacks. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
+`csep-api` imports the Cognito client ID and issuer, the database endpoint, name, and username, and the artifact bucket name from the other stacks. Only the bundle key varies per deploy. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
+
+### 5. csep-observability
+
+Deploy after `csep-api` and `csep-dispatcher` exist: the alarms read the API
+ID and the send queue names, and the SNS topic needs a confirmed subscription.
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-observability \
+  --template-file infra/observability.yaml \
+  --parameter-overrides \
+    EnvironmentName=dev \
+    ManagerEmail=<manager-email> \
+    ApiId=<api-id> \
+    MainQueueName=csep-send-queue-dev \
+    DeadLetterQueueName=csep-send-dlq-dev
+```
 
 ## Design notes
 

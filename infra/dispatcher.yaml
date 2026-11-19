@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  csep-dispatcher stack (ADR-0002, ADR-0004). Provisions EventBridge
+  Scheduler, the Dispatcher Lambda, and the SQS send queue with a DLQ.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  DispatcherArtifactKey:
+    Type: String
+    Description: S3 key of the packaged Dispatcher Lambda bundle
+  DispatcherHandler:
+    Type: String
+    Default: dispatcher.handler
+    Description: Exported handler of the Dispatcher Lambda
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for the Dispatcher Lambda VPC attachment
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  DbPort:
+    Type: Number
+    Default: 5432
+  QueueVisibilityTimeout:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 43200
+    Description: >
+      SQS visibility timeout in seconds. Align with the consumer processing
+      duration when its Lambda is provisioned.
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub csep-send-dlq-${EnvironmentName}
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  SendQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub csep-send-queue-${EnvironmentName}
+      MessageRetentionPeriod: 1209600
+      VisibilityTimeout: !Ref QueueVisibilityTimeout
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  SchedulerGroup:
+    Type: AWS::Scheduler::ScheduleGroup
+    Properties:
+      Name: !Sub csep-dispatch-${EnvironmentName}
+
+  DispatcherSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub csep-dispatcher-egress-${EnvironmentName}
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  DispatcherLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-dispatcher-lambda-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: CsepDispatcherAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: SendJobs
+                Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SendQueue.Arn
+              - Sid: ConnectToApplicationDatabase
+                Effect: Allow
+                Action: rds-db:connect
+                Resource:
+                  - Fn::ImportValue: csep-data-DBProxyUserArn
+
+  DispatcherLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-dispatcher-${EnvironmentName}
+      Runtime: nodejs22.x
+      Handler: !Ref DispatcherHandler
+      MemorySize: 256
+      Timeout: 60
+      Architectures: [arm64]
+      Role: !GetAtt DispatcherLambdaRole.Arn
+      Code:
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref DispatcherArtifactKey
+      Environment:
+        Variables:
+          SEND_QUEUE_URL: !Ref SendQueue
+          SCHEDULE_GROUP_NAME: !Ref SchedulerGroup
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt DispatcherSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  SchedulerInvocationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-scheduler-invoke-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${SchedulerGroup}/*"
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: CsepInvokeDispatcher
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt DispatcherLambda.Arn
+
+  SchedulerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DispatcherLambda
+      Action: lambda:InvokeFunction
+      Principal: scheduler.amazonaws.com
+      SourceArn: !Sub "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${SchedulerGroup}/*"
+
+Outputs:
+  SendQueueUrl:
+    Description: URL of the queue that the Dispatcher sends email jobs to
+    Value: !Ref SendQueue
+    Export:
+      Name: csep-dispatcher-SendQueueUrl
+  SendQueueArn:
+    Description: ARN of the queue that the Dispatcher sends email jobs to
+    Value: !GetAtt SendQueue.Arn
+    Export:
+      Name: csep-dispatcher-SendQueueArn
+  DeadLetterQueueArn:
+    Description: ARN of the send queue dead-letter queue
+    Value: !GetAtt DeadLetterQueue.Arn
+    Export:
+      Name: csep-dispatcher-DeadLetterQueueArn
+  SchedulerRoleArn:
+    Description: Role ARN to use as the target role for EventBridge schedules
+    Value: !GetAtt SchedulerInvocationRole.Arn
+    Export:
+      Name: csep-dispatcher-SchedulerRoleArn
+  SchedulerGroupArn:
+    Description: ARN of the group for per-campaign EventBridge schedules
+    Value: !GetAtt SchedulerGroup.Arn
+    Export:
+      Name: csep-dispatcher-SchedulerGroupArn
+  SchedulerGroupName:
+    Description: Name of the group for per-campaign EventBridge schedules
+    Value: !Ref SchedulerGroup
+    Export:
+      Name: csep-dispatcher-SchedulerGroupName
+  DispatcherLambdaArn:
+    Description: ARN of the Dispatcher Lambda invoked by schedules
+    Value: !GetAtt DispatcherLambda.Arn
+    Export:
+      Name: csep-dispatcher-DispatcherLambdaArn

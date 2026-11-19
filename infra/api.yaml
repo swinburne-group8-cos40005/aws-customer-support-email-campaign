@@ -123,6 +123,8 @@ Resources:
       Architectures: [arm64]
       Role: !GetAtt ApiLambdaRole.Arn
       Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
         S3Bucket:
           Fn::ImportValue: csep-artifact-CodeBucketName
         S3Key: !Ref ArtifactKey

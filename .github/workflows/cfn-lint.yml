@@ -29,4 +29,6 @@ jobs:
         run: pip install cfn-lint
       - name: Lint CloudFormation templates
         if: steps.changes.outputs.run == 'true'
-        run: cfn-lint infra/*.yaml
+        # Block on real errors only; warnings are printed for review
+        # but must not block the PR (e.g. runtime deprecation notices).
+        run: cfn-lint infra/*.yaml --non-zero-exit-code error
