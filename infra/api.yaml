@@ -673,6 +673,502 @@ Resources:
           AccountId: !Ref AWS::AccountId
           ApiId: !Ref HttpApi
 
+  ListTemplatesFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-list-templates-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: list-templates.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ListTemplatesIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ListTemplatesFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ListTemplatesRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/templates"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ListTemplatesIntegration}"
+
+  ListTemplatesInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ListTemplatesFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/templates"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  CreateTemplateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-create-template-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: create-template.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  CreateTemplateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt CreateTemplateFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  CreateTemplateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/templates"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${CreateTemplateIntegration}"
+
+  CreateTemplateInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateTemplateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/templates"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  GetTemplateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-get-template-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: get-template.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  GetTemplateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt GetTemplateFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  GetTemplateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/templates/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${GetTemplateIntegration}"
+
+  GetTemplateInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetTemplateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/templates/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  UpdateTemplateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-update-template-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: update-template.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  UpdateTemplateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt UpdateTemplateFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  UpdateTemplateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "PUT /v1/templates/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${UpdateTemplateIntegration}"
+
+  UpdateTemplateInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UpdateTemplateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/PUT/v1/templates/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  DeleteTemplateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-delete-template-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: delete-template.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  DeleteTemplateIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt DeleteTemplateFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  DeleteTemplateRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "DELETE /v1/templates/{id}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${DeleteTemplateIntegration}"
+
+  DeleteTemplateInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteTemplateFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/DELETE/v1/templates/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  ListSegmentsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-list-segments-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: list-segments.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  ListSegmentsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt ListSegmentsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ListSegmentsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/segments"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${ListSegmentsIntegration}"
+
+  ListSegmentsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ListSegmentsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/segments"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  CreateSegmentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-create-segment-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: create-segment.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  CreateSegmentIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt CreateSegmentFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  CreateSegmentRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/segments"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${CreateSegmentIntegration}"
+
+  CreateSegmentInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateSegmentFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/segments"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  PreviewSegmentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-preview-segment-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: preview-segment.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  PreviewSegmentIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt PreviewSegmentFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  PreviewSegmentRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /v1/segments/{id}/preview"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${PreviewSegmentIntegration}"
+
+  PreviewSegmentInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PreviewSegmentFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/POST/v1/segments/*"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:

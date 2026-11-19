@@ -64,6 +64,14 @@ each function to its exported handler name.
 | `POST /v1/campaigns/{id}/send` | `send-campaign.handler` | `handleSendCampaignRequest` |
 | `POST /v1/campaigns/{id}/cancel` | `cancel-campaign.handler` | `handleCancelCampaignRequest` |
 | `GET /v1/campaigns/{id}/logs` | `list-campaign-logs.handler` | `handleListCampaignLogsRequest` |
+| `GET /v1/templates` | `list-templates.handler` | `handleListTemplatesRequest` |
+| `POST /v1/templates` | `create-template.handler` | `handleCreateTemplateRequest` |
+| `GET /v1/templates/{id}` | `get-template.handler` | `handleGetTemplateRequest` |
+| `PUT /v1/templates/{id}` | `update-template.handler` | `handleUpdateTemplateRequest` |
+| `DELETE /v1/templates/{id}` | `delete-template.handler` | `handleDeleteTemplateRequest` |
+| `GET /v1/segments` | `list-segments.handler` | `handleListSegmentsRequest` |
+| `POST /v1/segments` | `create-segment.handler` | `handleCreateSegmentRequest` |
+| `POST /v1/segments/{id}/preview` | `preview-segment.handler` | `handlePreviewSegmentRequest` |
 
 State transitions follow `docs/email-state-machine.md`; the dispatcher
 invocation itself belongs to the messaging stack (#26/#47), so `/send` owns
