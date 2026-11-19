@@ -123,13 +123,12 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
-    ArtifactBucket=<bucket> \
     ArtifactKey=<key> \
     SubnetIds=<subnet-a>,<subnet-b> \
     VpcId=<vpc-id>
 ```
 
-`csep-api` imports the Cognito client ID and issuer plus the database endpoint, name, and username from the other stacks. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
+`csep-api` imports the Cognito client ID and issuer, the artifact bucket name, and the database endpoint, name, and username from the other stacks. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
 
 ## Design notes
 
