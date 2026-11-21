@@ -105,7 +105,7 @@
   }
 
   .theme-dark [class*="text-[#247A4D"] {
-    color: #247a4d;
+    color: #5fd29a;
   }
 
   .theme-dark [class~="bg-[#FAF9FB]"] {
@@ -133,5 +133,25 @@
 
   .theme-dark .theme-toggle:hover {
     background-color: #302d3a;
+  }
+
+  .theme-dark [class~="bg-[#FEF3C7]"] {
+    background-color: #3a2f12;
+  }
+
+  .theme-dark [class~="bg-[#DEF5E7]"] {
+    background-color: #153324;
+  }
+
+  .theme-dark [class~="bg-[#E0ECFF]"] {
+    background-color: #1b2a4a;
+  }
+
+  .theme-dark [class*="text-[#B45309"] {
+    color: #f0b455;
+  }
+
+  .theme-dark [class*="text-[#B91C1C"] {
+    color: #f58a8a;
   }
 }
