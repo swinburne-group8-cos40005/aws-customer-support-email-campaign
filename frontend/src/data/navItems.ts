@@ -6,4 +6,5 @@ export const navItems: Array<{ label: string; icon: IconName; view: AppView }> =
   { label: "Campaigns", icon: "campaign", view: "campaign" },
   { label: "Templates", icon: "layers", view: "templates" },
   { label: "Audience", icon: "audience", view: "audience" },
+  { label: "Audit Logs", icon: "clock", view: "audit-logs" },
 ]
