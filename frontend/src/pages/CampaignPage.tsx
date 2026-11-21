@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { AudienceStep } from "@/components/campaign/AudienceStep"
 import { CampaignFooter } from "@/components/campaign/CampaignFooter"
 import { CampaignHeader } from "@/components/campaign/CampaignHeader"
@@ -9,11 +10,6 @@ import { TemplateStep } from "@/components/campaign/TemplateStep"
 import { REVIEW_STEP } from "@/data/campaignSteps"
 import { type CampaignDraft } from "@/hooks/useCampaignDraft"
 
-/**
- * The four-step "Create campaign" wizard, plus its post-send confirmation.
- * Rendered inside the workspace's AppShell, so it only supplies its own
- * header, stepper, content and footer.
- */
 export function CampaignPage({
   draft,
   darkMode,
@@ -25,44 +21,47 @@ export function CampaignPage({
   onOpenSettings: () => void
   onToggleTheme: () => void
 }) {
-  const {
-    step,
-    setStep,
-    campaignName,
-    setCampaignName,
-    subject,
-    setSubject,
-    templateId,
-    setTemplateId,
-    segments,
-    addSegment,
-    segmentsSelected,
-    setSegmentsSelected,
-    sendMode,
-    setSendMode,
-    scheduleDate,
-    setScheduleDate,
-    scheduleTime,
-    setScheduleTime,
-    sent,
-    setSent,
-    recipients,
-  } = draft
+  const [step, setStep] = useState(0)
+  const [sendMode, setSendMode] = useState<"now" | "later">("now")
+  const [scheduleDate, setScheduleDate] = useState("")
+  const [scheduleTime, setScheduleTime] = useState("")
+  const [submitted, setSubmitted] = useState(false)
 
-  if (sent) {
+  const selectedTemplate = draft.templates.find(
+    (template) => template.templateId === draft.templateId,
+  )
+  const recipients = draft.preview?.netAudience ?? 0
+
+  async function continueWizard() {
+    if (step + 1 === REVIEW_STEP) {
+      const saved = await draft.saveDraft()
+      if (!saved) return
+    }
+    setStep((current) => current + 1)
+  }
+
+  async function submitCampaign() {
+    const result =
+      sendMode === "later"
+        ? await draft.schedule(scheduleDate, scheduleTime)
+        : await draft.sendNow()
+
+    if (result) setSubmitted(true)
+  }
+
+  if (submitted && draft.campaign) {
     return (
       <SentConfirmation
-        campaignName={campaignName}
+        campaign={draft.campaign}
+        campaignName={draft.campaignName}
         darkMode={darkMode}
+        onCancel={draft.cancelScheduled}
         onCreateAnother={() => {
+          setSubmitted(false)
           setStep(0)
-          setSent(false)
         }}
         onToggleTheme={onToggleTheme}
         recipients={recipients}
-        scheduleDate={scheduleDate}
-        scheduleTime={scheduleTime}
-        sendMode={sendMode}
       />
     )
   }
@@ -75,50 +74,64 @@ export function CampaignPage({
         onToggleTheme={onToggleTheme}
       />
       <Stepper setStep={setStep} step={step} />
+
       <main className="mx-auto w-full max-w-[1114px] flex-1 px-5 py-8 sm:px-8 sm:py-10">
+        {draft.loadError && (
+          <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
+            {draft.loadError}
+          </p>
+        )}
+        {draft.error && (
+          <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
+            {draft.error}
+          </p>
+        )}
+
         {step === 0 && (
-          <TemplateStep selected={templateId} setSelected={setTemplateId} />
+          <TemplateStep
+            templates={draft.templates}
+            selected={draft.templateId}
+            setSelected={draft.setTemplateId}
+          />
         )}
         {step === 1 && (
           <SetupStep
-            name={campaignName}
-            setName={setCampaignName}
-            setSubject={setSubject}
-            subject={subject}
+            name={draft.campaignName}
+            setName={draft.setCampaignName}
+            subject={selectedTemplate?.subjectTemplate ?? ""}
+            setSubject={() => {}}
           />
         )}
         {step === 2 && (
           <AudienceStep
-            onCreateSegment={(name, description) => {
-              const id = addSegment(name, description)
-              setSegmentsSelected((current) => [...current, id])
-            }}
-            segments={segments}
-            selected={segmentsSelected}
-            setSelected={setSegmentsSelected}
+            segments={draft.segments}
+            selected={draft.segmentId}
+            preview={draft.preview}
+            onSelect={draft.setSegmentId}
           />
         )}
         {step === REVIEW_STEP && (
           <ReviewStep
-            campaignName={campaignName}
+            campaignName={draft.campaignName}
+            template={selectedTemplate}
             recipients={recipients}
-            scheduleDate={scheduleDate}
-            scheduleTime={scheduleTime}
             sendMode={sendMode}
-            setScheduleDate={setScheduleDate}
-            setScheduleTime={setScheduleTime}
             setSendMode={setSendMode}
-            subject={subject}
-            templateId={templateId}
+            scheduleDate={scheduleDate}
+            setScheduleDate={setScheduleDate}
+            scheduleTime={scheduleTime}
+            setScheduleTime={setScheduleTime}
           />
         )}
       </main>
+
       <CampaignFooter
-        onBack={() => setStep(step - 1)}
-        onNext={() => setStep(step + 1)}
-        onSend={() => setSent(true)}
-        sendMode={sendMode}
+        busy={draft.busy}
         step={step}
+        sendMode={sendMode}
+        onBack={() => setStep((current) => Math.max(0, current - 1))}
+        onNext={continueWizard}
+        onSend={submitCampaign}
       />
     </div>
   )

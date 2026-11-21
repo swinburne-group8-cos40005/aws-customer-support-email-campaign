@@ -6,12 +6,14 @@ export function Button({
   className = "",
   onClick,
   type = "button",
+  disabled = false,
 }: {
   children: ReactNode
   variant?: "primary" | "secondary" | "ghost"
   className?: string
   onClick?: () => void
   type?: "button" | "submit"
+  disabled?: boolean
 }) {
   const variants = {
     primary:
@@ -20,9 +22,11 @@ export function Button({
       "border border-[#E3E2EA] bg-white text-[#33313F] hover:border-[#CAC7D5] hover:bg-[#F8F7FB]",
     ghost: "text-[#6D6979] hover:bg-[#F3F1F8] hover:text-[#272532]",
   }
+
   return (
     <button
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-[10px] px-4 text-[13px] font-semibold transition ${variants[variant]} ${className}`}
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-[10px] px-4 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
+      disabled={disabled}
       onClick={onClick}
       type={type}
     >
