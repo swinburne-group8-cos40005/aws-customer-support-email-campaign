@@ -1,9 +1,9 @@
 # REST API Specification & Contract
 
-- **Version:** 1.1.0
+- **Version:** 1.2.0
 - **Author:** Quang Thinh (Backend API & Database Lead)
 - **Reviewer / Aligned with:** Trong Hieu (Frontend Lead)
-- **Status:** Approved for Sprint 1 — v1.0 frozen for endpoint shapes; v1.1 adds auth clarification and data-access conventions (issues #21, #22)
+- **Status:** Approved for Sprint 1 — v1.0 frozen for endpoint shapes; v1.1 adds auth clarification and data-access conventions (issues #21, #22); v1.2 adds the statistics endpoints (§2.6, US04 & US05)
 - **Base URL:** `https://api.campaign.internal/v1`
 
 ---
@@ -232,3 +232,106 @@ Full CRUD endpoints for email templates (US01):
   "nextCursor": "eycreated_atI6IjIwMjYtMTAtMjVUMTQ6MzA6MDBaIiwiaWQiOiJlMWYyYTNiNCJ9"
 }
 ```
+
+---
+
+### 2.6 Statistics & Reporting (`/stats`, `/campaigns/{id}/stats`)
+
+Read-only endpoints for the manager reporting dashboard (US04, US05). Both require the Cognito JWT like every other endpoint (§1.1) and read through the same data access path (§1.4). They never write, so they emit **no** audit log.
+
+#### 2.6.1 Definitions (single source of truth)
+
+All counts are per email log row (one row per recipient of a campaign). Rates are derived from the counts below and are **never stored**.
+
+| Field | Meaning |
+|---|---|
+| `sent` | Emails accepted by SES (every log row whose `sendStatus` is `sent`, `delivered`, `bounced` or `complained`) |
+| `delivered` | Emails SES confirmed as delivered to the recipient's mail server |
+| `bounced` | Emails that bounced (hard or soft) |
+| `complained` | Emails the recipient reported as spam |
+| `failed` | Emails that never reached SES after all retries (permanent send failure) |
+| `pending` | Emails created but not yet accepted by SES (`pending`, `queued`) |
+
+| Rate | Formula | Notes |
+|---|---|---|
+| `delivery` | `delivered / sent` | |
+| `bounce` | `bounced / sent` | |
+| `complaint` | `complained / sent` | |
+
+* Rates are decimal fractions between `0` and `1` (`0.0213` = 2.13 %), rounded to 4 decimals.
+* When `sent` is `0` the rates are `null` (not `0`): "no data yet" must not look like "perfect".
+* `alerts.bounce` and `alerts.complaint` are one of `ok | warning | critical`, computed server-side from the thresholds returned in the same response, so the frontend never hard-codes them. A `null` rate gives `ok`.
+
+Default thresholds (backend constants; the review levels of SES are 5 % bounce and 0.1 % complaint):
+
+| Rate | `warning` at | `critical` at |
+|---|---|---|
+| bounce | ≥ 2 % (`0.02`) | ≥ 5 % (`0.05`) |
+| complaint | ≥ 0.05 % (`0.0005`) | ≥ 0.1 % (`0.001`) |
+
+#### `GET /stats/overview`
+* **Purpose:** Totals across all campaigns plus the most recent campaigns with their own counts and rates (powers the dashboard home page, US04 & US05).
+* **Query Parameters:**
+  * `limit` (int, default: 10, max: 50): number of recent campaigns in `recentCampaigns`, newest first by `createdAt`.
+* **Response `200 OK`:**
+```json
+{
+  "generatedAt": "2026-11-21T09:00:00Z",
+  "totals": {
+    "campaigns": 92,
+    "sent": 48210,
+    "delivered": 46890,
+    "bounced": 1020,
+    "complained": 18,
+    "failed": 300,
+    "pending": 0
+  },
+  "rates": { "delivery": 0.9726, "bounce": 0.0212, "complaint": 0.0004 },
+  "alerts": { "bounce": "warning", "complaint": "ok" },
+  "campaignsByStatus": {
+    "draft": 3, "scheduled": 2, "sending": 1,
+    "completed": 80, "failed": 4, "cancelled": 2
+  },
+  "thresholds": {
+    "bounce": { "warning": 0.02, "critical": 0.05 },
+    "complaint": { "warning": 0.0005, "critical": 0.001 }
+  },
+  "recentCampaigns": [
+    {
+      "campaignId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+      "name": "October Monthly Newsletter",
+      "status": "completed",
+      "scheduledAt": "2026-10-30T10:00:00Z",
+      "counts": { "sent": 8278, "delivered": 8100, "bounced": 150, "complained": 3, "failed": 25, "pending": 0 },
+      "rates": { "delivery": 0.9785, "bounce": 0.0181, "complaint": 0.0004 },
+      "alerts": { "bounce": "ok", "complaint": "ok" }
+    }
+  ]
+}
+```
+
+#### `GET /campaigns/{id}/stats`
+* **Purpose:** Counts, rates, alert levels and the status history of one campaign (US04 & US05).
+* **Response `200 OK`:**
+```json
+{
+  "campaignId": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "name": "October Monthly Newsletter",
+  "status": "completed",
+  "generatedAt": "2026-11-21T09:00:00Z",
+  "counts": { "sent": 8278, "delivered": 8100, "bounced": 150, "complained": 3, "failed": 25, "pending": 0 },
+  "rates": { "delivery": 0.9785, "bounce": 0.0181, "complaint": 0.0004 },
+  "alerts": { "bounce": "ok", "complaint": "ok" },
+  "thresholds": {
+    "bounce": { "warning": 0.02, "critical": 0.05 },
+    "complaint": { "warning": 0.0005, "critical": 0.001 }
+  },
+  "statusHistory": [
+    { "status": "draft", "changedAt": "2026-10-25T08:00:00.000Z", "changedBy": "us-east-1:12345678-abcd-1234-abcd-1234567890ab" },
+    { "status": "sending", "changedAt": "2026-10-30T10:00:00.000Z", "changedBy": "us-east-1:12345678-abcd-1234-abcd-1234567890ab" },
+    { "status": "completed", "changedAt": "2026-10-30T10:12:00.000Z", "changedBy": null }
+  ]
+}
+```
+* `statusHistory` is ordered oldest first. It is built from `audit_logs`, which records **human actions only** (`create`, `schedule`, `send`, `cancel`), so those entries carry the Cognito `sub` in `changedBy`. When the current status was reached by the system (dispatcher: `sending`, `completed`, `failed`), one final entry with `changedBy: null` is added, stamped with the campaign's last update. Intermediate system transitions (for example `scheduled → sending → completed`) are not stored anywhere, so only the latest one appears. A complete history would need a dedicated status-event table (out of scope for Sprint 2).
+* **Errors:** `404 RESOURCE_NOT_FOUND` when the campaign does not exist, `400` (standard validation error) when `{id}` is not a UUID, `503 DB_UNAVAILABLE` as in §1.4.
