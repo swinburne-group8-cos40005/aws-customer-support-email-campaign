@@ -77,9 +77,35 @@ each function to its exported handler name.
 | `PUT /v1/customers/{id}/preferences` | `update-customer-preferences.handler` | `handleUpdateCustomerPreferencesRequest` |
 | `GET /v1/audit-logs` | `list-audit-logs.handler` | `handleListAuditLogsRequest` |
 
-State transitions follow `docs/email-state-machine.md`; the dispatcher
-invocation itself belongs to the messaging stack (#26/#47), so `/send` owns
-the `draft -> sending` transition and its audit row.
+The internal Dispatcher Lambda is bundled separately from the API routes:
+
+| Trigger | Handler file | Event contract |
+| --- | --- | --- |
+| EventBridge Scheduler | `dispatcher.handler` | `{ "campaignId": "<uuid>", "trigger": "scheduled" }` |
+| `POST /campaigns/{id}/send` | `dispatcher.handler` | `{ "campaignId": "<uuid>", "trigger": "immediate" }` (asynchronous invoke) |
+
+Build the Dispatcher bundle from `backend/` with `npm run build:dispatcher`.
+The deployable folder is `dist/dispatcher/`; archive its contents so
+`dispatcher.js` and `assets/rds-ca-global-bundle.pem` are at the Lambda
+package root. The handler path is `dispatcher.handler`, matching
+`DispatcherHandler` in `infra/dispatcher.yaml`.
+
+The Dispatcher locks by campaign ID, seeds `pending` email logs with the
+schema's SHA-256 idempotency key, filters members found in
+`email_suppressions`, sends SQS batches of at most 10, and marks successful
+messages `queued`. The current database schema does not define
+`customers.is_subscribed`; suppression-table membership is the opt-out
+source of truth.
+
+State transitions follow `docs/email-state-machine.md`. `/send` commits the
+`draft -> sending` transition and audit row before asynchronously invoking
+the Dispatcher. `/schedule` creates a one-time EventBridge Scheduler schedule
+in the exported Dispatcher group, targeting the same Lambda and using the
+shared `{ campaignId, trigger }` payload. `/cancel` deletes that schedule;
+a schedule that has already executed or been deleted is treated as absent.
+The schedule operation runs within the campaign transaction, so an AWS
+Scheduler API error rolls back the database transition and audit row.
+Scheduled Dispatcher invocations perform `scheduled -> sending`.
 
 ## Database connectivity (two modes)
 
