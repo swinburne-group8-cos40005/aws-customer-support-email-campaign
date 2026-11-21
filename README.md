@@ -36,11 +36,11 @@ database bootstrap through a temporary SSM tunnel, is in
 | :--- | :--- |
 | `infra/` | CloudFormation templates for the `csep-*` stacks + deploy runbook |
 | `backend/` | TypeScript Lambda backend, layered (handlers → controllers → services → repositories) — merging via #19 |
+| `frontend/` | React + TypeScript frontend |
 | `db/` | PostgreSQL schema and seed scripts |
-| `docs/` | Specifications, ADRs, design notes, meeting minutes — indexed in [docs/README.md](docs/README.md) |
+| `docs/` | Specifications, ADRs, design notes, meeting minutes, and early Figma UI design prototype screenshots — indexed in [docs/README.md](docs/README.md) |
 | `tests/` | DDL validation harness for `db/schema.sql` |
 | `src/` | Python prototype, superseded by `backend/` (tracked in #41) |
-| `early-prototype-design/` | Early UI design screenshots, kept as historical evidence |
 | `.github/` | PR template, CODEOWNERS, CI workflows (`cfn-lint` on every PR touching `infra/*.yaml`) |
 
 ## Getting started
