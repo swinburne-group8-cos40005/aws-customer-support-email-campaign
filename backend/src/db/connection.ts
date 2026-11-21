@@ -31,6 +31,10 @@ export interface Queryable {
     query(text: string, values?: unknown[]): Promise<QueryResult>;
 }
 
+export interface DatabaseSession extends Queryable {
+    transaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T>;
+}
+
 let pool: Pool | null = null;
 
 const _createPool = (env: Env): Pool => {
@@ -160,18 +164,112 @@ export const closeDatabasePool = async (): Promise<void> => {
 export async function runInTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
     const client: PoolClient = await getDatabasePool().connect();
     try {
+        return await _runTransaction(client, fn);
+    } finally {
+        client.release();
+    }
+}
+
+const _queryWithClient = async (
+    client: PoolClient,
+    text: string,
+    values?: unknown[],
+): Promise<QueryResult> => {
+    const result = await client.query(text, values);
+    return {
+        rows: result.rows as Row[],
+        rowCount: result.rowCount,
+    };
+};
+
+const _runTransaction = async <T>(
+    client: PoolClient,
+    fn: (tx: Queryable) => Promise<T>,
+): Promise<T> => {
+    const tx: Queryable = {
+        query: (text, values) => _queryWithClient(client, text, values),
+    };
+
+    try {
         await client.query('BEGIN');
-        const result = await fn(client as unknown as Queryable);
+        const result = await fn(tx);
         await client.query('COMMIT');
         return result;
     } catch (err) {
         try {
             await client.query('ROLLBACK');
         } catch {
-            // connection already unusable; releasing below is still required
+            // The original failure is more useful; release the unusable connection below.
         }
         throw err;
-    } finally {
-        client.release();
     }
+};
+
+/**
+ * Serializes dispatch attempts for one campaign across Lambda containers.
+ * The callback uses the same connection for short transactions, so the
+ * advisory lock does not consume an extra pool slot during dispatch.
+ *
+ * @param key - Stable key identifying the resource being serialized.
+ * @param operation - Work to run with the locked database session.
+ *
+ * @returns The operation result.
+ *
+ * @throws Unknown If lock acquisition, the operation, or lock release fails.
+ */
+export async function withDatabaseAdvisoryLock<T>(
+    key: string,
+    operation: (session: DatabaseSession) => Promise<T>,
+): Promise<T> {
+    const client = await getDatabasePool().connect();
+    let lockAcquired = false;
+    let result!: T;
+    let operationFailed = false;
+    let operationError: unknown;
+    let releaseFailed = false;
+    let releaseError: unknown;
+
+    try {
+        await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [key]);
+        lockAcquired = true;
+        const session: DatabaseSession = {
+            query: (text, values) => _queryWithClient(client, text, values),
+            transaction: (fn) => _runTransaction(client, fn),
+        };
+        result = await operation(session);
+    } catch (err) {
+        operationFailed = true;
+        operationError = err;
+    }
+
+    if (lockAcquired) {
+        try {
+            await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [key]);
+        } catch (err) {
+            releaseFailed = true;
+            releaseError = err;
+        }
+    }
+
+    const releaseCause = releaseFailed
+        ? releaseError instanceof Error
+            ? releaseError
+            : new Error(String(releaseError))
+        : undefined;
+    client.release(releaseCause);
+
+    if (operationFailed && releaseFailed) {
+        throw new AggregateError(
+            [operationError, releaseError],
+            'Dispatch operation and advisory lock release both failed',
+        );
+    }
+    if (operationFailed) {
+        throw operationError;
+    }
+    if (releaseFailed) {
+        throw releaseError;
+    }
+
+    return result;
 }

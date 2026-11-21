@@ -7,7 +7,7 @@
 #
 # Optional inputs unlock the stacks that are not needed for the API pass:
 #   ARTIFACT_KEY=api.zip                     csep-api
-#   DISPATCHER_ARTIFACT_KEY=dispatcher.zip   csep-dispatcher (#26)
+#   DISPATCHER_ARTIFACT_KEY=dispatcher.zip   csep-dispatcher (#26; required for API)
 #   EVENT_HANDLER_ARTIFACT_KEY=events.zip    csep-feedback (#26)
 #   SNS_TOPIC_ARN=arn:aws:sns:...            csep-feedback (#29 publishes here)
 #   API_ID=abc123 MANAGER_EMAIL=ops@example  csep-observability (#27/#28)
@@ -70,23 +70,8 @@ deploy_stack csep-data \
         "DeletionProtection=${DELETION_PROTECTION:-false}" \
         "BootstrapSecurityGroupId=${BOOTSTRAP_SECURITY_GROUP_ID:-}"
 
-# 4. API — Lambda bundle from the artifact bucket, IAM DB auth.
-#    Requires ARTIFACT_KEY (the packaged bundle uploaded by the backend
-#    build); see backend/README.md for packaging.
-if [ -n "${ARTIFACT_KEY:-}" ]; then
-    deploy_stack csep-api \
-        --capabilities CAPABILITY_IAM \
-        --parameter-overrides \
-            "EnvironmentName=${ENV_NAME}" \
-            "ArtifactKey=${ARTIFACT_KEY}" \
-            "SubnetIds=${SUBNET_IDS}" \
-            "VpcId=${VPC_ID}" \
-            "FrontendOrigin=${FRONTEND_ORIGIN}"
-else
-    echo "── Skipping csep-api (ARTIFACT_KEY not set) ──"
-fi
-
-# 5. Dispatcher — the send queue, Scheduler and Dispatcher Lambda (#26).
+# 4. Dispatcher — the send queue, Scheduler and Dispatcher Lambda (#26).
+#    Deploy before csep-api because the /send function imports its ARN.
 if [ -f "${TEMPLATE_DIR}/dispatcher.yaml" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
     deploy_stack csep-dispatcher \
         --capabilities CAPABILITY_IAM \
@@ -97,6 +82,21 @@ if [ -f "${TEMPLATE_DIR}/dispatcher.yaml" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-
             "VpcId=${VPC_ID}"
 else
     echo "── Skipping csep-dispatcher (DISPATCHER_ARTIFACT_KEY not set or template missing) ──"
+fi
+
+# 5. API — Lambda bundle from the artifact bucket, IAM DB auth.
+#    Requires csep-dispatcher to exist because /send invokes its Lambda.
+if [ -n "${ARTIFACT_KEY:-}" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
+    deploy_stack csep-api \
+        --capabilities CAPABILITY_IAM \
+        --parameter-overrides \
+            "EnvironmentName=${ENV_NAME}" \
+            "ArtifactKey=${ARTIFACT_KEY}" \
+            "SubnetIds=${SUBNET_IDS}" \
+            "VpcId=${VPC_ID}" \
+            "FrontendOrigin=${FRONTEND_ORIGIN}"
+else
+    echo "── Skipping csep-api (ARTIFACT_KEY and DISPATCHER_ARTIFACT_KEY required) ──"
 fi
 
 # 6. Feedback — the SES event queue and Event Handler (#26). The SNS topic

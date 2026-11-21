@@ -98,7 +98,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub csep-dispatcher-${EnvironmentName}
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: !Ref DispatcherHandler
       MemorySize: 256
       Timeout: 60

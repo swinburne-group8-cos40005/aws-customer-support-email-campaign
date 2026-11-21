@@ -2,7 +2,7 @@
     "name": "campaign-api",
     "private": true,
     "version": "0.1.0",
-    "description": "Campaign API Lambda handlers (Issue #5). Node 20.x runtime, bundled with esbuild at deploy time.",
+    "description": "Campaign API and Dispatcher Lambda handlers bundled with esbuild for Node.js 24.x.",
     "engines": {
         "node": ">=20"
     },
@@ -18,11 +18,15 @@
         "#utils/*": "./src/utils/*.ts"
     },
     "scripts": {
+        "build:dispatcher": "node scripts/build-dispatcher.mjs",
         "typecheck": "tsc --noEmit",
         "test": "jest",
         "test:coverage": "jest --coverage"
     },
     "dependencies": {
+        "@aws-sdk/client-lambda": "^3.1175.0",
+        "@aws-sdk/client-scheduler": "^3.1175.0",
+        "@aws-sdk/client-sqs": "^3.1175.0",
         "@aws-sdk/rds-signer": "^3.1170.0",
         "pg": "^8.13.1",
         "zod": "^3.25.76"
@@ -32,6 +36,7 @@
         "@types/jest": "^29.5.14",
         "@types/node": "^22.10.1",
         "@types/pg": "^8.11.10",
+        "esbuild": "^0.28.2",
         "jest": "^29.7.0",
         "ts-jest": "^29.2.5",
         "typescript": "^5.7.2"
