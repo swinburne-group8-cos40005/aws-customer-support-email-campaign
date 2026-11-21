@@ -15,6 +15,21 @@ pnpm build          # production build in dist/
 pnpm typecheck      # tsc --noEmit
 ```
 
+## API configuration
+
+The Overview page reads live data from the Statistics API
+(`docs/api-contract.md` §2.6). Create `frontend/.env.local`:
+
+```bash
+VITE_API_BASE_URL=https://<api-id>.execute-api.<region>.amazonaws.com   # csep-api FrontendConfig.apiBaseUrl
+VITE_DEV_ID_TOKEN=<cognito id token>                                    # optional, local development only
+```
+
+Requests send `Authorization: Bearer <Cognito ID token>`. The token comes from
+`sessionStorage` (`csep.idToken`) and falls back to `VITE_DEV_ID_TOKEN`. While the
+sign-in screen is still a prototype, a 401 on the dashboard shows a field to paste
+a token for the current tab.
+
 ## Project structure
 
 ```
@@ -35,6 +50,8 @@ src/
 │   └── HelpPage.tsx
 │
 ├── components/
+│   ├── stats/                # reporting dashboard: StatCard, AlertBanner, RateIndicator,
+│   │                         #   SendBreakdownBar, CampaignStatsPanel, ErrorState
 │   ├── ui/                   # generic building blocks
 │   │   ├── Icon.tsx  Logo.tsx  Button.tsx  ThemeToggle.tsx  PageIntro.tsx
 │   ├── layout/               # app chrome

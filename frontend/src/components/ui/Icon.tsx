@@ -1,6 +1,7 @@
 import { type ReactNode } from "react"
 
 export type IconName =
+  | "alert"
   | "arrow-left"
   | "arrow-right"
   | "audience"
@@ -22,6 +23,7 @@ export type IconName =
   | "more"
   | "paper-plane"
   | "plus"
+  | "refresh"
   | "search"
   | "settings"
   | "sparkles"
@@ -29,6 +31,20 @@ export type IconName =
   | "users"
 
 const iconPaths: Record<IconName, ReactNode> = {
+  alert: (
+    <>
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v4M12 17h.01" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" />
+      <path d="M3 21v-5h5" />
+      <path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" />
+      <path d="M21 3v5h-5" />
+    </>
+  ),
   "arrow-left": <path d="m15 18-6-6 6-6" />,
   "arrow-right": <path d="m9 18 6-6-6-6" />,
   audience: (
