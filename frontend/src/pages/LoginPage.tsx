@@ -32,7 +32,7 @@ export function LoginPage({
             <Icon name="paper-plane" size={18} />
           </div>
           <span className="text-[20px] font-bold tracking-[-0.03em]">
-            Placeholder Name
+            PostlyMail
           </span>
         </div>
         <div className="relative z-10 my-auto max-w-[530px]">
