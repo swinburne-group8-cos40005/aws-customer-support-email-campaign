@@ -8,7 +8,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
       </div>
       {!compact && (
         <span className="text-[20px] font-bold tracking-[-0.03em] text-[#20202B]">
-          Placeholder Name
+          PostlyMail
         </span>
       )}
     </div>

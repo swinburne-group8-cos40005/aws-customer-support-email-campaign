@@ -1,80 +1,132 @@
-import { useMemo, useState } from "react"
-import { initialSegments } from "@/data/segments"
-import { type SendMode } from "@/types"
-import { getTomorrowDate } from "@/utils/dates"
+import { useEffect, useState } from "react"
+import {
+  campaignApi,
+  type ApiSegment,
+  type ApiTemplate,
+  type Campaign,
+  type SegmentPreview,
+} from "@/lib/api"
 
-/**
- * Holds everything the campaign wizard (and the Templates / Audience pages
- * that feed into it) needs to share. Lives in the workspace so progress
- * survives navigating to another view and back.
- */
 export function useCampaignDraft() {
-  const [step, setStep] = useState(0)
-  const [campaignName, setCampaignName] = useState("Lorem ipsum")
-  const [subject, setSubject] = useState(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-  )
-  const [templateId, setTemplateId] = useState(2)
-  const [segments, setSegments] = useState(initialSegments)
-  const [segmentsSelected, setSegmentsSelected] = useState([1])
-  const [sendMode, setSendMode] = useState<SendMode>("now")
-  const [scheduleDate, setScheduleDate] = useState(getTomorrowDate)
-  const [scheduleTime, setScheduleTime] = useState("09:00")
-  const [sent, setSent] = useState(false)
+  const [templates, setTemplates] = useState<ApiTemplate[]>([])
+  const [segments, setSegments] = useState<ApiSegment[]>([])
+  const [templateId, setTemplateId] = useState("")
+  const [segmentId, setSegmentId] = useState("")
+  const [campaignName, setCampaignName] = useState("")
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [preview, setPreview] = useState<SegmentPreview | null>(null)
+  const [loadError, setLoadError] = useState("")
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState(false)
 
-  const recipients = useMemo(
-    () =>
-      segmentsSelected.reduce(
-        (sum, id) =>
-          sum +
-          Number(
-            segments
-              .find((segment) => segment.id === id)
-              ?.contacts.replace(",", "") ?? 0,
-          ),
-        0,
-      ),
-    [segments, segmentsSelected],
-  )
+  useEffect(() => {
+    let active = true
+    Promise.all([campaignApi.templates(), campaignApi.segments()])
+      .then(([loadedTemplates, loadedSegments]) => {
+        if (!active) return
+        setTemplates(loadedTemplates)
+        setSegments(loadedSegments)
+        setTemplateId(loadedTemplates[0]?.templateId ?? "")
+      })
+      .catch((cause: unknown) => {
+        if (active) setLoadError(cause instanceof Error ? cause.message : "Could not load campaign data.")
+      })
+    return () => {
+      active = false
+    }
+  }, [])
 
-  /** Adds a custom segment and returns its new id. */
-  const addSegment = (name: string, description = "") => {
-    const id = Math.max(...segments.map((segment) => segment.id)) + 1
-    setSegments((current) => [
-      ...current,
-      {
-        id,
-        name,
-        desc: description || "Custom audience segment",
-        contacts: "0",
-        growth: "New",
-      },
-    ])
-    return id
+  useEffect(() => {
+    let active = true
+    setPreview(null)
+    if (!segmentId) return
+
+    campaignApi.previewSegment(segmentId)
+      .then((result) => {
+        if (active) setPreview(result)
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : "Could not preview this segment.")
+      })
+
+    return () => {
+      active = false
+    }
+  }, [segmentId])
+
+  const body = (): { name: string; templateId: string; segmentId: string } => {
+    if (!campaignName.trim() || !templateId || !segmentId) {
+      throw new Error("Campaign name, template, and audience are required.")
+    }
+    return { name: campaignName.trim(), templateId, segmentId }
+  }
+
+  async function persistDraft(): Promise<Campaign> {
+    const payload = body()
+    const saved = campaign 
+      ? await campaignApi.updateDraft(campaign.campaignId, payload)
+      : await campaignApi.createDraft(payload)
+    setCampaign(saved)
+    return saved
+  }
+
+  async function run<T>(action: () => Promise<T>): Promise<T | null> {
+    setBusy(true)
+    setError("")
+    try {
+      return await action()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The request failed.")
+      return null
+    } finally {
+      setBusy(false)
+    }
   }
 
   return {
-    step,
-    setStep,
-    campaignName,
-    setCampaignName,
-    subject,
-    setSubject,
+    templates,
+    segments,
     templateId,
     setTemplateId,
-    segments,
-    addSegment,
-    segmentsSelected,
-    setSegmentsSelected,
-    sendMode,
-    setSendMode,
-    scheduleDate,
-    setScheduleDate,
-    scheduleTime,
-    setScheduleTime,
-    sent,
-    setSent,
-    recipients,
+    segmentId,
+    setSegmentId,
+    campaignName,
+    setCampaignName,
+    campaign,
+    preview,
+    loadError,
+    error,
+    busy,
+
+    // Call when entering review step: creates initial draft
+    saveDraft: () => run(persistDraft),
+
+    // Each operation updates the draft first, then performs the transition
+    schedule: (date: string, time: string) =>
+      run(async () => {
+        const draft = await persistDraft()
+        const scheduledAt = new Date(`${date}T${time}`).toISOString()
+        const result = await campaignApi.schedule(draft.campaignId, scheduledAt)
+        setCampaign(result)
+        return result
+      }),
+
+    sendNow: () =>
+      run(async () => {
+        const draft = await persistDraft()
+        const result = await campaignApi.sendNow(draft.campaignId)
+        setCampaign(result)
+        return result
+      }),
+
+    cancelScheduled: () =>
+      campaign
+        ? run(async () => {
+          const result = await campaignApi.cancel(campaign.campaignId)
+          setCampaign(result)
+          return result
+        })
+        : Promise.resolve(null),
   }
 }
 

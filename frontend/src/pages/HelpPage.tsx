@@ -14,7 +14,7 @@ export function HelpPage() {
     <main className="mx-auto max-w-[960px] px-5 py-8 sm:px-8 sm:py-10">
       <div className="rounded-[24px] bg-[#241F29] px-6 py-10 text-center text-white sm:px-10 sm:py-12">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#FCA5A5]">
-          Postly support
+          PostlyMail support
         </p>
         <h1 className="mt-3 text-[30px] font-semibold tracking-[-0.04em]">
           How can we help?
