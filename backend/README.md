@@ -116,6 +116,18 @@ are tested at their own seams:
 - `tests/repositories/` — SQL text, parameters, and row mapping.
 - `tests/config/` — environment contract.
 
+## Packaging & Artifact Upload
+
+Bundle each stack's handlers with `esbuild` and package them into deployable `.zip` archives (preserving `assets/rds-ca-global-bundle.pem` for RDS Proxy TLS verification):
+
+```sh
+npm run package              # produces dist/api.zip (and dispatcher.zip / events.zip / worker.zip when present)
+npm run package -- api       # bundle only the HTTP API handlers
+./scripts/upload-artifact.sh # uploads dist/api.zip to csep-artifact-CodeBucketName and prints ARTIFACT_KEY
+```
+
+Handlers are emitted at the archive root (`create-campaign.js`, `list-campaigns.js`, ...) to match `Handler: <name>.handler` in `infra/api.yaml`.
+
 ## Adding the next endpoint
 
 1. Repository functions for the new SQL.
