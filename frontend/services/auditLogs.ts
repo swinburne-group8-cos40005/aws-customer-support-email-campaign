@@ -1,4 +1,3 @@
-
 export type AuditLog = {
   audit_log_id: string
   user_id: string
@@ -47,8 +46,6 @@ export async function getAuditLogs(
     params.set("cursor", filters.cursor)
   }
 
-  // Temporary token hook. Replace this with your Cognito access-token
-  // retrieval once the real Cognito authentication is integrated.
   const accessToken = sessionStorage.getItem("accessToken")
 
   const response = await fetch(
