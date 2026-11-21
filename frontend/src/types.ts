@@ -5,6 +5,7 @@ export type AppView =
   | "campaign"
   | "templates"
   | "audience"
+  | "audit-logs" 
   | "settings"
   | "help"
 
