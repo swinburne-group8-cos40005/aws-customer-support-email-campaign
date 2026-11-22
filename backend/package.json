@@ -18,6 +18,7 @@
         "#utils/*": "./src/utils/*.ts"
     },
     "scripts": {
+        "build:event-handler": "node scripts/build-event-handler.mjs",
         "build:dispatcher": "node scripts/build-dispatcher.mjs",
         "typecheck": "tsc --noEmit",
         "test": "jest",

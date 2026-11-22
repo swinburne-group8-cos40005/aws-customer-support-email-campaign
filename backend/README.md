@@ -97,6 +97,24 @@ messages `queued`. The current database schema does not define
 `customers.is_subscribed`; suppression-table membership is the opt-out
 source of truth.
 
+The EventHandler consumes SNS-wrapped SES `Delivery`, `Bounce`, and
+`Complaint` notifications from `FeedbackQueue`. It matches `mail.messageId`
+to `email_logs.ses_message_id`, records deduplicated raw events in
+`email_events`, and only transitions logs still in `sent`. Permanent bounces
+and complaints upsert `email_suppressions` in the same database transaction.
+Its SQS handler returns `batchItemFailures` for malformed or unprocessable
+records; `infra/feedback.yaml` enables `ReportBatchItemFailures`.
+Each SQS record body must contain the SNS `Type: "Notification"` envelope;
+the SES event JSON is parsed from its `Message` field. Both current SES
+`eventType` and legacy `notificationType` names are accepted. SES `Send`
+notifications are acknowledged without modifying delivery state because the
+Worker owns the `queued -> sent` transition.
+
+Build the EventHandler bundle from `backend/` with
+`npm run build:event-handler`. The deployable folder is
+`dist/event-handler/`; archive its contents so `event-handler.js` and
+`assets/rds-ca-global-bundle.pem` are at the Lambda package root.
+
 State transitions follow `docs/email-state-machine.md`. `/send` commits the
 `draft -> sending` transition and audit row before asynchronously invoking
 the Dispatcher. `/schedule` creates a one-time EventBridge Scheduler schedule
