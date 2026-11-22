@@ -25,10 +25,14 @@ import {
     updateCampaignRow,
 } from '#repositories/campaign.repository';
 
+import { failCampaignDispatch } from '#repositories/dispatcher.repository';
 import {
     listEmailLogRows,
     mapEmailLogRowToResponse,
 } from '#repositories/email-log.repository';
+
+import { invokeDispatcherAsynchronously } from '#services/dispatcher-invoker';
+import { createCampaignSchedule, deleteCampaignSchedule } from '#services/campaign-scheduler';
 
 import {
     ConflictError,
@@ -383,57 +387,68 @@ export const scheduleCampaign = async (
     scheduledAt: string,
     userId: string,
 ): Promise<CampaignRow> => {
-    return runInTransaction(async (tx) => {
-        const existing = await findCampaignRowForUpdate(tx, campaignId);
-        if (!existing) {
-            throw new NotFoundError('campaign', campaignId);
-        }
+    let scheduleCreated = false;
+    try {
+        return await runInTransaction(async (tx) => {
+            const existing = await findCampaignRowForUpdate(tx, campaignId);
+            if (!existing) {
+                throw new NotFoundError('campaign', campaignId);
+            }
 
-        if (existing.status !== 'draft') {
-            throw new ConflictError(
-                `Campaign ${campaignId} is '${existing.status}' and can only be scheduled while it is a draft.`,
-                { field: 'status', reason: `status is '${existing.status}', expected 'draft'` },
-            );
-        }
+            if (existing.status !== 'draft') {
+                throw new ConflictError(
+                    `Campaign ${campaignId} is '${existing.status}' and can only be scheduled while it is a draft.`,
+                    { field: 'status', reason: `status is '${existing.status}', expected 'draft'` },
+                );
+            }
 
-        const leadTimeMs = Date.parse(scheduledAt) - Date.now();
-        if (leadTimeMs < _MINIMUM_SCHEDULE_LEAD_MS) {
-            throw new ValidationError(
-                'scheduledAt',
-                'scheduledAt must be at least 5 minutes in the future.',
-            );
-        }
+            const leadTimeMs = Date.parse(scheduledAt) - Date.now();
+            if (leadTimeMs < _MINIMUM_SCHEDULE_LEAD_MS) {
+                throw new ValidationError(
+                    'scheduledAt',
+                    'scheduledAt must be at least 5 minutes in the future.',
+                );
+            }
 
-        const updated = await scheduleCampaignRow(tx, campaignId, scheduledAt);
-        if (!updated) {
-            throw new Error('campaign SCHEDULE after row lock produced no row');
-        }
+            const updated = await scheduleCampaignRow(tx, campaignId, scheduledAt);
+            if (!updated) {
+                throw new Error('campaign SCHEDULE after row lock produced no row');
+            }
 
-        await insertAuditRecord(tx, {
-            userId,
-            action: 'schedule',
-            entityType: 'campaign',
-            entityId: campaignId,
-            changes: {
-                before: _toCampaignAuditSnapshot(existing),
-                after: _toCampaignAuditSnapshot(updated),
-            },
+            await insertAuditRecord(tx, {
+                userId,
+                action: 'schedule',
+                entityType: 'campaign',
+                entityId: campaignId,
+                changes: {
+                    before: _toCampaignAuditSnapshot(existing),
+                    after: _toCampaignAuditSnapshot(updated),
+                },
+            });
+
+            await createCampaignSchedule(campaignId, scheduledAt);
+            scheduleCreated = true;
+
+            return updated;
         });
-
-        return updated;
-    });
+    } catch (error) {
+        if (scheduleCreated) {
+            try {
+                await deleteCampaignSchedule(campaignId);
+            } catch (cleanupError) {
+                throw new AggregateError(
+                    [error, cleanupError],
+                    `Schedule creation succeeded but campaign ${campaignId} could not be rolled back`,
+                );
+            }
+        }
+        throw error;
+    }
 };
 
 /**
- * Dispatches a draft campaign immediately (US03): `status = 'sending'`
- * and `dispatchMode = 'immediate'` in one conditional update, with
- * `scheduledAt = NOW()` so every campaign keeps a dispatch timestamp.
- * No EventBridge rule is created — the `scheduled` state is skipped
- * entirely (docs/api-contract.md §2.1, amended by issue #4).
- *
- * The Dispatcher invocation itself belongs to the messaging stack
- * (`csep-dispatcher`, #26/#47); this endpoint owns the state
- * transition and its audit row.
+ * Dispatches a draft campaign immediately (US03), then invokes the
+ * Dispatcher asynchronously after the database transaction commits.
  *
  * @param campaignId - Campaign UUID from the path.
  * @param userId - Caller identity for the `send` audit row.
@@ -451,7 +466,7 @@ export const sendCampaignImmediately = async (
     campaignId: string,
     userId: string,
 ): Promise<CampaignRow> => {
-    return runInTransaction(async (tx) => {
+    const row = await runInTransaction(async (tx) => {
         const existing = await findCampaignRowForUpdate(tx, campaignId);
         if (!existing) {
             throw new NotFoundError('campaign', campaignId);
@@ -482,6 +497,22 @@ export const sendCampaignImmediately = async (
 
         return updated;
     });
+
+    try {
+        await invokeDispatcherAsynchronously(campaignId);
+    } catch (error) {
+        try {
+            await failCampaignDispatch(campaignId);
+        } catch (failureError) {
+            throw new AggregateError(
+                [error, failureError],
+                `Dispatcher invocation failed and campaign ${campaignId} could not be marked failed`,
+            );
+        }
+        throw error;
+    }
+
+    return row;
 };
 
 /**
@@ -506,40 +537,62 @@ export const cancelScheduledCampaign = async (
     campaignId: string,
     userId: string,
 ): Promise<CampaignRow> => {
-    return runInTransaction(async (tx) => {
-        const existing = await findCampaignRowForUpdate(tx, campaignId);
-        if (!existing) {
-            throw new NotFoundError('campaign', campaignId);
-        }
+    let deletedScheduleAt: string | null = null;
+    try {
+        return await runInTransaction(async (tx) => {
+            const existing = await findCampaignRowForUpdate(tx, campaignId);
+            if (!existing) {
+                throw new NotFoundError('campaign', campaignId);
+            }
 
-        if (existing.status !== 'scheduled') {
-            throw new ConflictError(
-                `Campaign ${campaignId} is '${existing.status}' and can only be cancelled while it is scheduled.`,
-                { field: 'status', reason: `status is '${existing.status}', expected 'scheduled'` },
-            );
-        }
+            if (existing.status !== 'scheduled') {
+                throw new ConflictError(
+                    `Campaign ${campaignId} is '${existing.status}' and can only be cancelled while it is scheduled.`,
+                    { field: 'status', reason: `status is '${existing.status}', expected 'scheduled'` },
+                );
+            }
+            if (!existing.scheduled_at) {
+                throw new Error(`Scheduled campaign ${campaignId} has no scheduled_at timestamp`);
+            }
 
-        const updated = await cancelCampaignRow(tx, campaignId);
-        if (!updated) {
-            throw new ConflictError(
-                `Campaign ${campaignId} is already due to send and can no longer be cancelled.`,
-                { field: 'scheduledAt', reason: 'scheduledAt is not in the future' },
-            );
-        }
+            const updated = await cancelCampaignRow(tx, campaignId);
+            if (!updated) {
+                throw new ConflictError(
+                    `Campaign ${campaignId} is already due to send and can no longer be cancelled.`,
+                    { field: 'scheduledAt', reason: 'scheduledAt is not in the future' },
+                );
+            }
 
-        await insertAuditRecord(tx, {
-            userId,
-            action: 'cancel',
-            entityType: 'campaign',
-            entityId: campaignId,
-            changes: {
-                before: _toCampaignAuditSnapshot(existing),
-                after: _toCampaignAuditSnapshot(updated),
-            },
+            await insertAuditRecord(tx, {
+                userId,
+                action: 'cancel',
+                entityType: 'campaign',
+                entityId: campaignId,
+                changes: {
+                    before: _toCampaignAuditSnapshot(existing),
+                    after: _toCampaignAuditSnapshot(updated),
+                },
+            });
+
+            if (await deleteCampaignSchedule(campaignId)) {
+                deletedScheduleAt = existing.scheduled_at;
+            }
+
+            return updated;
         });
-
-        return updated;
-    });
+    } catch (error) {
+        if (deletedScheduleAt) {
+            try {
+                await createCampaignSchedule(campaignId, deletedScheduleAt);
+            } catch (cleanupError) {
+                throw new AggregateError(
+                    [error, cleanupError],
+                    `Schedule deletion succeeded but campaign ${campaignId} could not be rolled back`,
+                );
+            }
+        }
+        throw error;
+    }
 };
 
 /**

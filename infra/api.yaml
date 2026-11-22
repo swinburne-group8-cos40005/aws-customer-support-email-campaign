@@ -101,7 +101,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
-        - PolicyName: CsepDbConnect
+        - PolicyName: CsepApiCampaignAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -111,6 +111,26 @@ Resources:
                 # database user; the Lambda cannot authenticate as master.
                 Resource:
                   - Fn::ImportValue: csep-data-DBProxyUserArn
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - Fn::ImportValue: csep-dispatcher-DispatcherLambdaArn
+              - Effect: Allow
+                Action:
+                  - scheduler:CreateSchedule
+                  - scheduler:DeleteSchedule
+                Resource:
+                  - Fn::Sub:
+                      - "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/${ScheduleGroupName}/*"
+                      - ScheduleGroupName:
+                          Fn::ImportValue: csep-dispatcher-SchedulerGroupName
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - Fn::ImportValue: csep-dispatcher-SchedulerRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: scheduler.amazonaws.com
 
   CreateCampaignFunction:
     Type: AWS::Lambda::Function
@@ -450,6 +470,12 @@ Resources:
             Fn::ImportValue: csep-data-DbName
           DB_USER:
             Fn::ImportValue: csep-data-DbUsername
+          DISPATCHER_LAMBDA_ARN:
+            Fn::ImportValue: csep-dispatcher-DispatcherLambdaArn
+          SCHEDULER_GROUP_NAME:
+            Fn::ImportValue: csep-dispatcher-SchedulerGroupName
+          SCHEDULER_ROLE_ARN:
+            Fn::ImportValue: csep-dispatcher-SchedulerRoleArn
       VpcConfig:
         SecurityGroupIds:
           - !GetAtt LambdaSecurityGroup.GroupId
@@ -512,6 +538,8 @@ Resources:
             Fn::ImportValue: csep-data-DbName
           DB_USER:
             Fn::ImportValue: csep-data-DbUsername
+          DISPATCHER_LAMBDA_ARN:
+            Fn::ImportValue: csep-dispatcher-DispatcherLambdaArn
       VpcConfig:
         SecurityGroupIds:
           - !GetAtt LambdaSecurityGroup.GroupId
@@ -574,6 +602,8 @@ Resources:
             Fn::ImportValue: csep-data-DbName
           DB_USER:
             Fn::ImportValue: csep-data-DbUsername
+          SCHEDULER_GROUP_NAME:
+            Fn::ImportValue: csep-dispatcher-SchedulerGroupName
       VpcConfig:
         SecurityGroupIds:
           - !GetAtt LambdaSecurityGroup.GroupId

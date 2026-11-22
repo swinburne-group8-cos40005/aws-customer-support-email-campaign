@@ -184,7 +184,7 @@ aws cloudformation deploy \
     VpcId=<vpc-id>
 ```
 
-`csep-api` imports the Cognito client ID and issuer, the database endpoint, name, and username, and the artifact bucket name from the other stacks. Only the bundle key varies per deploy. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
+`csep-api` imports the Cognito client ID and issuer, the database endpoint, name, and username, the artifact bucket name, and the Dispatcher Lambda ARN. Deploy `csep-dispatcher` first; the API `/send` function invokes that ARN asynchronously. The API role's invoke permission is scoped to that function. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
 
 ### 5. csep-observability
 

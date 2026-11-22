@@ -31,6 +31,9 @@ import {
 
 import { checkCatalogExists } from '#repositories/catalog.repository';
 import { listEmailLogRows } from '#repositories/email-log.repository';
+import { invokeDispatcherAsynchronously } from '#services/dispatcher-invoker';
+import { createCampaignSchedule, deleteCampaignSchedule } from '#services/campaign-scheduler';
+import { failCampaignDispatch } from '#repositories/dispatcher.repository';
 
 
 
@@ -67,6 +70,19 @@ jest.mock('#repositories/email-log.repository', () => ({
         .mapEmailLogRowToResponse,
 }));
 
+jest.mock('#services/dispatcher-invoker', () => ({
+    invokeDispatcherAsynchronously: jest.fn(),
+}));
+
+jest.mock('#services/campaign-scheduler', () => ({
+    createCampaignSchedule: jest.fn(),
+    deleteCampaignSchedule: jest.fn(),
+}));
+
+jest.mock('#repositories/dispatcher.repository', () => ({
+    failCampaignDispatch: jest.fn(),
+}));
+
 const runInTransactionMock = runInTransaction as jest.Mock;
 const checkCatalogExistsMock = checkCatalogExists as jest.Mock;
 const insertAuditRecordMock = insertAuditRecord as jest.Mock;
@@ -81,6 +97,10 @@ const scheduleCampaignRowMock = scheduleCampaignRow as jest.Mock;
 const markCampaignRowSendingMock = markCampaignRowSending as jest.Mock;
 const cancelCampaignRowMock = cancelCampaignRow as jest.Mock;
 const listEmailLogRowsMock = listEmailLogRows as jest.Mock;
+const invokeDispatcherAsynchronouslyMock = invokeDispatcherAsynchronously as jest.Mock;
+const createCampaignScheduleMock = createCampaignSchedule as jest.Mock;
+const deleteCampaignScheduleMock = deleteCampaignSchedule as jest.Mock;
+const failCampaignDispatchMock = failCampaignDispatch as jest.Mock;
 
 const CAMPAIGN_ID = '33333333-3333-4000-8000-000000000009';
 const TEMPLATE_ID = '22222222-2222-4000-8000-000000000001';
@@ -161,6 +181,14 @@ beforeEach(() => {
     cancelCampaignRowMock.mockResolvedValue(row({ status: 'cancelled' }));
 
     listEmailLogRowsMock.mockReset();
+    invokeDispatcherAsynchronouslyMock.mockReset();
+    invokeDispatcherAsynchronouslyMock.mockResolvedValue(undefined);
+    createCampaignScheduleMock.mockReset();
+    createCampaignScheduleMock.mockResolvedValue(undefined);
+    deleteCampaignScheduleMock.mockReset();
+    deleteCampaignScheduleMock.mockResolvedValue(true);
+    failCampaignDispatchMock.mockReset();
+    failCampaignDispatchMock.mockResolvedValue(undefined);
     listEmailLogRowsMock.mockResolvedValue([]);
 });
 
@@ -372,6 +400,7 @@ describe('scheduleCampaign', () => {
         const updated = await scheduleCampaign(CAMPAIGN_ID, at, USER_ID);
 
         expect(scheduleCampaignRowMock).toHaveBeenCalledWith(tx, CAMPAIGN_ID, at);
+        expect(createCampaignScheduleMock).toHaveBeenCalledWith(CAMPAIGN_ID, at);
         expect(updated.status).toBe('scheduled');
 
         const [, entry] = insertAuditRecordMock.mock.calls[0] as [
@@ -424,6 +453,7 @@ describe('sendCampaignImmediately', () => {
     test('moves a draft to sending and audits the send action', async () => {
         const updated = await sendCampaignImmediately(CAMPAIGN_ID, USER_ID);
 
+        expect(invokeDispatcherAsynchronouslyMock).toHaveBeenCalledWith(CAMPAIGN_ID);
         expect(markCampaignRowSendingMock).toHaveBeenCalledWith(tx, CAMPAIGN_ID);
         expect(updated.status).toBe('sending');
         expect(updated.dispatch_mode).toBe('immediate');
@@ -453,6 +483,14 @@ describe('sendCampaignImmediately', () => {
         expect(markCampaignRowSendingMock).not.toHaveBeenCalled();
     });
 
+    test('marks the campaign failed when the asynchronous Dispatcher invoke fails', async () => {
+        invokeDispatcherAsynchronouslyMock.mockRejectedValue(new Error('invoke failed'));
+
+        await expect(sendCampaignImmediately(CAMPAIGN_ID, USER_ID)).rejects.toThrow('invoke failed');
+
+        expect(failCampaignDispatchMock).toHaveBeenCalledWith(CAMPAIGN_ID);
+    });
+
     test('fails loudly when the guarded UPDATE returns no row', async () => {
         markCampaignRowSendingMock.mockResolvedValue(null);
 
@@ -460,15 +498,51 @@ describe('sendCampaignImmediately', () => {
             'campaign SEND after row lock produced no row',
         );
     });
+
+    test('surfaces Scheduler failures so the database transaction can roll back', async () => {
+        createCampaignScheduleMock.mockRejectedValue(new Error('Scheduler unavailable'));
+
+        await expect(
+            scheduleCampaign(CAMPAIGN_ID, scheduledAt(10), USER_ID),
+        ).rejects.toThrow('Scheduler unavailable');
+    });
+
+    test('deletes the created schedule when the database transaction cannot commit', async () => {
+        runInTransactionMock.mockImplementationOnce(async (operation) => {
+            await operation(tx);
+            throw new Error('commit failed');
+        });
+
+        await expect(
+            scheduleCampaign(CAMPAIGN_ID, scheduledAt(10), USER_ID),
+        ).rejects.toThrow('commit failed');
+        expect(deleteCampaignScheduleMock).toHaveBeenCalledWith(CAMPAIGN_ID);
+    });
+
+    test('reports failed schedule cleanup after a transaction commit failure', async () => {
+        runInTransactionMock.mockImplementationOnce(async (operation) => {
+            await operation(tx);
+            throw new Error('commit failed');
+        });
+        deleteCampaignScheduleMock.mockRejectedValue(new Error('delete failed'));
+
+        await expect(
+            scheduleCampaign(CAMPAIGN_ID, scheduledAt(10), USER_ID),
+        ).rejects.toBeInstanceOf(AggregateError);
+    });
 });
 
 describe('cancelScheduledCampaign', () => {
     test('cancels a scheduled campaign and audits the transition', async () => {
-        findCampaignRowForUpdateMock.mockResolvedValue(row({ status: 'scheduled' }));
+        findCampaignRowForUpdateMock.mockResolvedValue(row({
+            status: 'scheduled',
+            scheduled_at: scheduledAt(10),
+        }));
 
         const updated = await cancelScheduledCampaign(CAMPAIGN_ID, USER_ID);
 
         expect(cancelCampaignRowMock).toHaveBeenCalledWith(tx, CAMPAIGN_ID);
+        expect(deleteCampaignScheduleMock).toHaveBeenCalledWith(CAMPAIGN_ID);
         expect(updated.status).toBe('cancelled');
 
         const [, entry] = insertAuditRecordMock.mock.calls[0] as [
@@ -498,7 +572,10 @@ describe('cancelScheduledCampaign', () => {
     });
 
     test('409 when the schedule is already due to send', async () => {
-        findCampaignRowForUpdateMock.mockResolvedValue(row({ status: 'scheduled' }));
+        findCampaignRowForUpdateMock.mockResolvedValue(row({
+            status: 'scheduled',
+            scheduled_at: scheduledAt(10),
+        }));
         cancelCampaignRowMock.mockResolvedValue(null);
 
         await expect(cancelScheduledCampaign(CAMPAIGN_ID, USER_ID)).rejects.toMatchObject({
@@ -506,6 +583,48 @@ describe('cancelScheduledCampaign', () => {
             details: { field: 'scheduledAt' },
         });
         expect(insertAuditRecordMock).not.toHaveBeenCalled();
+    });
+
+    test('surfaces Scheduler deletion failures so the database transaction can roll back', async () => {
+        findCampaignRowForUpdateMock.mockResolvedValue(row({
+            status: 'scheduled',
+            scheduled_at: scheduledAt(10),
+        }));
+        deleteCampaignScheduleMock.mockRejectedValue(new Error('Scheduler unavailable'));
+
+        await expect(cancelScheduledCampaign(CAMPAIGN_ID, USER_ID))
+            .rejects.toThrow('Scheduler unavailable');
+    });
+
+    test('recreates a deleted schedule when the cancellation transaction cannot commit', async () => {
+        const scheduledAtValue = scheduledAt(10);
+        findCampaignRowForUpdateMock.mockResolvedValue(row({
+            status: 'scheduled',
+            scheduled_at: scheduledAtValue,
+        }));
+        runInTransactionMock.mockImplementationOnce(async (operation) => {
+            await operation(tx);
+            throw new Error('commit failed');
+        });
+
+        await expect(cancelScheduledCampaign(CAMPAIGN_ID, USER_ID))
+            .rejects.toThrow('commit failed');
+        expect(createCampaignScheduleMock).toHaveBeenCalledWith(CAMPAIGN_ID, scheduledAtValue);
+    });
+
+    test('reports failed schedule restoration after a cancellation commit failure', async () => {
+        findCampaignRowForUpdateMock.mockResolvedValue(row({
+            status: 'scheduled',
+            scheduled_at: scheduledAt(10),
+        }));
+        runInTransactionMock.mockImplementationOnce(async (operation) => {
+            await operation(tx);
+            throw new Error('commit failed');
+        });
+        createCampaignScheduleMock.mockRejectedValue(new Error('create failed'));
+
+        await expect(cancelScheduledCampaign(CAMPAIGN_ID, USER_ID))
+            .rejects.toBeInstanceOf(AggregateError);
     });
 });
 
