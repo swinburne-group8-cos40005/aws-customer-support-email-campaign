@@ -154,7 +154,12 @@ queue values, and Scheduler values.
 
 Deploy this stack after `csep-data` has been bootstrapped and the separate
 email-sending stack has created its SNS topic. Pass that topic's ARN as
-`SnsTopicArn`; this template creates only the SQS subscription and queue policy.
+`SnsTopicArn`; this template creates the SQS subscription and queue policy,
+then consumes SNS-wrapped SES events with the EventHandler bundle.
+Build it from `backend/` with `npm run build:event-handler`, then archive the
+contents of `dist/event-handler/` at the package root before uploading the
+bundle represented by `ArtifactKey`. The queue event source enables partial
+batch response reporting so failed records alone are retried.
 
 ```sh
 aws cloudformation deploy \
