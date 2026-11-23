@@ -66,33 +66,511 @@ Resources:
       Endpoint: !Ref ManagerEmail
 
   # CLOUDWATCH LOG GROUPS
+  # Explicit groups prevent Lambda from creating unbounded-retention defaults.
 
   CreateCampaignLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub
-        - /aws/lambda/csep-create-campaign-${Environment}
-        - Environment: !Ref EnvironmentName
+      LogGroupName: !Sub /aws/lambda/csep-create-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ListCampaignsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-list-campaigns-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  GetCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-get-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  UpdateCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-update-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  DeleteCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-delete-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ScheduleCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-schedule-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  SendCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-send-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  CancelCampaignLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-cancel-campaign-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ListCampaignLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-list-campaign-logs-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ListTemplatesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-list-templates-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  CreateTemplateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-create-template-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  GetTemplateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-get-template-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  UpdateTemplateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-update-template-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  DeleteTemplateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-delete-template-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ListSegmentsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-list-segments-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  CreateSegmentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-create-segment-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  PreviewSegmentLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-preview-segment-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  GetCustomerPreferencesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-get-customer-preferences-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  UpdateCustomerPreferencesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-update-customer-preferences-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  ListAuditLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-list-audit-logs-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  DispatcherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-dispatcher-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  EventHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-event-handler-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
+
+  WorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-worker-${EnvironmentName}
       RetentionInDays: !Ref LogRetentionDays
 
   # CLOUDWATCH METRIC FILTERS
+  # The ERROR pattern is retained from the existing template. Confirm that the
+  # application logs emit this term as a standalone/searchable log token.
 
   LambdaErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref CreateCampaignLogGroup
-      FilterPattern: "ERROR"
+      FilterPattern: 'ERROR'
       MetricTransformations:
         - MetricNamespace: CSEP/Application
           MetricName: LambdaErrors
           MetricValue: "1"
           DefaultValue: 0
 
+  ListCampaignsLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ListCampaignsLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  GetCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref GetCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  DeleteCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DeleteCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ScheduleCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ScheduleCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  SendCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref SendCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  CancelCampaignLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CancelCampaignLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ListCampaignLogsLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ListCampaignLogsLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ListTemplatesLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ListTemplatesLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  CreateTemplateLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CreateTemplateLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  GetTemplateLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref GetTemplateLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateTemplateLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateTemplateLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  DeleteTemplateLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DeleteTemplateLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ListSegmentsLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ListSegmentsLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  CreateSegmentLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CreateSegmentLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  PreviewSegmentLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref PreviewSegmentLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  GetCustomerPreferencesLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref GetCustomerPreferencesLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateCustomerPreferencesLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateCustomerPreferencesLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ListAuditLogsLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ListAuditLogsLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  DispatcherLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DispatcherLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  EventHandlerLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref EventHandlerLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  WorkerLambdaErrorMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref WorkerLogGroup
+      FilterPattern: 'ERROR'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: LambdaErrors
+          MetricValue: "1"
+          DefaultValue: 0
+
+  # AUDIT FILTERS
+  # Limited to user-initiated actions listed in the audit strategy.
+  # Automated dispatcher/worker/SES event processing is not counted as an audit event.
+
   AuditEventMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       LogGroupName: !Ref CreateCampaignLogGroup
-      FilterPattern: "AUDIT"
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateCampaignAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateCampaignLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  DeleteCampaignAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DeleteCampaignLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  ScheduleCampaignAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ScheduleCampaignLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  SendCampaignAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref SendCampaignLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  CancelCampaignAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CancelCampaignLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  CreateTemplateAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CreateTemplateLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateTemplateAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateTemplateLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  DeleteTemplateAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref DeleteTemplateLogGroup
+      FilterPattern: 'AUDIT'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: AuditEvents
+          MetricValue: "1"
+          DefaultValue: 0
+
+  UpdateCustomerPreferencesAuditEventMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref UpdateCustomerPreferencesLogGroup
+      FilterPattern: 'AUDIT'
       MetricTransformations:
         - MetricNamespace: CSEP/Application
           MetricName: AuditEvents
@@ -176,7 +654,7 @@ Resources:
     Properties:
       AlarmName: !Sub csep-lambda-errors-${EnvironmentName}
       AlarmDescription: >
-        Triggers when the campaign Lambda reports an execution error.
+        Triggers when the create-campaign Lambda reports an execution error.
       Namespace: AWS/Lambda
       MetricName: Errors
       Dimensions:

@@ -10,6 +10,7 @@ import { HelpPage } from "@/pages/HelpPage"
 import { OverviewPage } from "@/pages/OverviewPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { TemplatesPage } from "@/pages/TemplatesPage"
+import { AuditLogsPage } from "@/pages/AuditLogsPage"
 import { type AppView, type WorkspaceSettings } from "@/types"
 
 /** The signed-in app: owns navigation and the state shared between views. */
@@ -82,6 +83,7 @@ export function Workspace({
             />
           )}
           {view === "help" && <HelpPage />}
+          {view === "audit-logs" && <AuditLogsPage />}
         </>
       )}
     </AppShell>
