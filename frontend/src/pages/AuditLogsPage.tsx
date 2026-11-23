@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import {
   getAuditLogs,
   type AuditLog,
-} from "/services/auditLogs"
+} from "@/services/auditLogs"
 import { PageIntro } from "@/components/ui/PageIntro"
 
 const PAGE_SIZE = 20
