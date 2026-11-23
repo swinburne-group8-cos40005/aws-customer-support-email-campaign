@@ -1,4 +1,3 @@
-
 import { getAccessToken } from "@/services/auth";
 
 export type AuditLog = {
