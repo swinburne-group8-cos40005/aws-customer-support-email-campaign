@@ -13,7 +13,6 @@ import { TemplatesPage } from "@/pages/TemplatesPage"
 import { AuditLogsPage } from "@/pages/AuditLogsPage"
 import { type AppView, type WorkspaceSettings } from "@/types"
 
-/** The signed-in app: owns navigation and the state shared between views. */
 export function Workspace({
   darkMode,
   onLogout,
@@ -55,26 +54,20 @@ export function Workspace({
           {view === "overview" && (
             <OverviewPage
               onCreate={() => {
-                draft.setStep(0)
                 setView("campaign")
               }}
             />
           )}
           {view === "templates" && (
             <TemplatesPage
-              onSelect={draft.setTemplateId}
-              onUseTemplate={() => {
-                draft.setStep(1)
-                setView("campaign")
-              }}
+              templates={draft.templates}
               selected={draft.templateId}
+              onSelect={draft.setTemplateId}
+              onUseTemplate={() => setView("campaign")}
             />
           )}
           {view === "audience" && (
-            <AudiencePage
-              onCreate={(name) => draft.addSegment(name)}
-              segments={draft.segments}
-            />
+            <AudiencePage segments={draft.segments} />
           )}
           {view === "settings" && (
             <SettingsPage
