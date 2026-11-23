@@ -1385,6 +1385,130 @@ Resources:
           AccountId: !Ref AWS::AccountId
           ApiId: !Ref HttpApi
 
+  GetStatsOverviewFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-get-stats-overview-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: get-stats-overview.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  GetStatsOverviewIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt GetStatsOverviewFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  GetStatsOverviewRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/stats/overview"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${GetStatsOverviewIntegration}"
+
+  GetStatsOverviewInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetStatsOverviewFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/stats/overview"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
+  GetCampaignStatsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-get-campaign-stats-${EnvironmentName}
+      Runtime: nodejs24.x
+      Handler: get-campaign-stats.handler
+      MemorySize: 256
+      Timeout: 10
+      Architectures: [arm64]
+      Role: !GetAtt ApiLambdaRole.Arn
+      Code:
+        # Packaged bundle lives in the csep-artifact bucket, which is
+        # deployed first; only the bundle key varies per build.
+        S3Bucket:
+          Fn::ImportValue: csep-artifact-CodeBucketName
+        S3Key: !Ref ArtifactKey
+      Environment:
+        Variables:
+          DB_HOST:
+            Fn::ImportValue: csep-data-DBProxyEndpoint
+          DB_PORT: !Ref DbPort
+          DB_NAME:
+            Fn::ImportValue: csep-data-DbName
+          DB_USER:
+            Fn::ImportValue: csep-data-DbUsername
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
+
+  GetCampaignStatsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub
+        - "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
+        - Region: !Ref AWS::Region
+          FunctionArn: !GetAtt GetCampaignStatsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  GetCampaignStatsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /v1/campaigns/{id}/stats"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+      Target: !Sub "integrations/${GetCampaignStatsIntegration}"
+
+  GetCampaignStatsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetCampaignStatsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - "arn:aws:execute-api:${Region}:${AccountId}:${ApiId}/*/GET/v1/campaigns/*/stats"
+        - Region: !Ref AWS::Region
+          AccountId: !Ref AWS::AccountId
+          ApiId: !Ref HttpApi
+
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
