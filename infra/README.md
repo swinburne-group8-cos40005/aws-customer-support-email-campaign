@@ -53,7 +53,7 @@ The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique. The `U
 aws cloudformation deploy \
   --stack-name csep-data \
   --template-file infra/data.yaml \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
     VpcId=<vpc-id> \
@@ -71,7 +71,7 @@ aws cloudformation deploy \
    aws cloudformation deploy \
      --stack-name csep-data \
      --template-file infra/data.yaml \
-     --capabilities CAPABILITY_IAM \
+     --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides \
        EnvironmentName=dev VpcId=<vpc-id> VpcCidrBlock=<10.x.0.0/16> \
        SubnetIds=<subnet-a>,<subnet-b> MasterDbUsername=csepadmin DbName=csep \
@@ -118,7 +118,7 @@ aws cloudformation deploy \
    aws cloudformation deploy \
      --stack-name csep-data \
      --template-file infra/data.yaml \
-     --capabilities CAPABILITY_IAM \
+     --capabilities CAPABILITY_NAMED_IAM \
      --parameter-overrides \
        EnvironmentName=dev VpcId=<vpc-id> VpcCidrBlock=<10.x.0.0/16> \
        SubnetIds=<subnet-a>,<subnet-b> MasterDbUsername=csepadmin DbName=csep \
@@ -136,7 +136,7 @@ resources. No Worker or SES resources are created by this stack.
 aws cloudformation deploy \
   --stack-name csep-dispatcher \
   --template-file infra/dispatcher.yaml \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
     DispatcherArtifactKey=<dispatcher-key> \
@@ -165,7 +165,7 @@ batch response reporting so failed records alone are retried.
 aws cloudformation deploy \
   --stack-name csep-feedback \
   --template-file infra/feedback.yaml \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
     ArtifactKey=<key> \
@@ -181,7 +181,7 @@ aws cloudformation deploy \
 aws cloudformation deploy \
   --stack-name csep-api \
   --template-file infra/api.yaml \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
     ArtifactKey=<key> \

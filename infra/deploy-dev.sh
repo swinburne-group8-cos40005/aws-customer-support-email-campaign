@@ -59,7 +59,7 @@ deploy_stack csep-auth \
 #    Leave BootstrapSecurityGroupId empty for the normal run; set it only
 #    while executing infra/README.md, step 2 (schema bootstrap).
 deploy_stack csep-data \
-    --capabilities CAPABILITY_IAM \
+    --capabilities CAPABILITY_NAMED_IAM \
     --parameter-overrides \
         "EnvironmentName=${ENV_NAME}" \
         "VpcId=${VPC_ID}" \
@@ -74,7 +74,7 @@ deploy_stack csep-data \
 #    Deploy before csep-api because the /send function imports its ARN.
 if [ -f "${TEMPLATE_DIR}/dispatcher.yaml" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
     deploy_stack csep-dispatcher \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "DispatcherArtifactKey=${DISPATCHER_ARTIFACT_KEY}" \
@@ -88,7 +88,7 @@ fi
 #    Requires csep-dispatcher to exist because /send invokes its Lambda.
 if [ -n "${ARTIFACT_KEY:-}" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
     deploy_stack csep-api \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "ArtifactKey=${ARTIFACT_KEY}" \
@@ -105,7 +105,7 @@ if [ -f "${TEMPLATE_DIR}/feedback.yaml" ] \
     && [ -n "${EVENT_HANDLER_ARTIFACT_KEY:-}" ] \
     && [ -n "${SNS_TOPIC_ARN:-}" ]; then
     deploy_stack csep-feedback \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "ArtifactKey=${EVENT_HANDLER_ARTIFACT_KEY}" \
