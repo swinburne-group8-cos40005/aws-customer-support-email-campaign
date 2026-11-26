@@ -64,10 +64,11 @@ export function Workspace({
               selected={draft.templateId}
               onSelect={draft.setTemplateId}
               onUseTemplate={() => setView("campaign")}
+              onReload={draft.reloadTemplates}
             />
           )}
           {view === "audience" && (
-            <AudiencePage segments={draft.segments} />
+            <AudiencePage segments={draft.segments} onReload={draft.reloadSegments} />
           )}
           {view === "settings" && (
             <SettingsPage
