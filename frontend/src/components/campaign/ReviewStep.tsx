@@ -35,6 +35,9 @@ export function ReviewStep({
         <p className="mt-1 text-sm text-[#625E6B]">
           Subject: {template?.subjectTemplate ?? "No subject"}
         </p>
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm text-[#625E6B]">
+          Body: {template?.bodyText ?? template?.bodyHtml ?? "No body"}
+        </p>
         <p className="mt-4 text-sm text-[#625E6B]">
           Estimated recipients: {recipients.toLocaleString()}
         </p>

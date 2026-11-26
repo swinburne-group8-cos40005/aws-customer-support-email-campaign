@@ -5,11 +5,15 @@ export function SetupStep({
   setName,
   subject,
   setSubject,
+  body,
+  setBody,
 }: {
   name: string
   setName: (value: string) => void
   subject: string
   setSubject: (value: string) => void
+  body: string
+  setBody: (value: string) => void
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_310px]">
@@ -61,7 +65,7 @@ export function SetupStep({
             </label>
             <label className="block">
               <span className="mb-2 block text-[13px] font-semibold text-[#403D48]">
-                From email
+                From email (title of email)
               </span>
               <div className="field flex items-center text-[#4F4B58]">
                 hello@postly.com
@@ -73,11 +77,12 @@ export function SetupStep({
           </div>
           <label className="block">
             <span className="mb-2 block text-[13px] font-semibold text-[#403D48]">
-              Preview text
+              Email body
             </span>
             <textarea
               className="field min-h-24 resize-none py-3"
-              defaultValue="Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+              onChange={(event) => setBody(event.target.value)}
+              value={body}
             />
           </label>
         </div>
