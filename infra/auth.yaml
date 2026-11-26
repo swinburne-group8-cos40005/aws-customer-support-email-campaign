@@ -53,6 +53,7 @@ Resources:
             Priority: 1
       LambdaConfig:
         PostAuthentication: !GetAtt CognitoAuthTriggerFunction.Arn
+        PreTokenGeneration: !GetAtt CognitoAuthTriggerFunction.Arn
         PostConfirmation: !GetAtt CognitoAuthTriggerFunction.Arn
 
   CognitoAuthTriggerRole:
