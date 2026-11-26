@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { localDateTimeToUtcIso } from "@/utils/dates"
 import {
   campaignApi,
   type ApiSegment,
@@ -83,8 +84,20 @@ export function useCampaignDraft() {
     }
   }
 
+  async function reloadTemplates() {
+    const loaded = await campaignApi.templates()
+    setTemplates(loaded)
+  }
+
+  async function reloadSegments() {
+    const loaded = await campaignApi.segments()
+    setSegments(loaded)
+  }
+
   return {
     templates,
+    reloadTemplates,
+    reloadSegments,
     segments,
     templateId,
     setTemplateId,
@@ -105,7 +118,7 @@ export function useCampaignDraft() {
     schedule: (date: string, time: string) =>
       run(async () => {
         const draft = await persistDraft()
-        const scheduledAt = new Date(`${date}T${time}`).toISOString()
+        const scheduledAt = localDateTimeToUtcIso(date, time)
         const result = await campaignApi.schedule(draft.campaignId, scheduledAt)
         setCampaign(result)
         return result
