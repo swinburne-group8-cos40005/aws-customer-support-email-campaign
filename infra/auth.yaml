@@ -16,6 +16,13 @@ Parameters:
     Description: Deployed frontend origin used as hosted-UI callback and sign-out URL
     AllowedPattern: '^https://[A-Za-z0-9.-]+(:[0-9]+)?$'
     ConstraintDescription: Must be an https origin with no path or trailing slash, e.g. https://app.example.com
+  CallbackUrls:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173"
+    Description: Redirect URIs after login — add the deployed frontend origin before public use
+  LogoutUrls:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173"
 Conditions:
   AllowLocalhost: !Not [!Equals [!Ref EnvironmentName, prod]]
 
@@ -44,6 +51,50 @@ Resources:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
+      LambdaConfig:
+        PostAuthentication: !GetAtt CognitoAuthTriggerFunction.Arn
+        PostConfirmation: !GetAtt CognitoAuthTriggerFunction.Arn
+
+  CognitoAuthTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub csep-cognito-auth-trigger-role-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  CognitoAuthTriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-cognito-auth-trigger-${EnvironmentName}
+      Description: Logs safe Cognito authentication lifecycle events.
+      Runtime: nodejs20.x
+      Handler: cognito-auth-trigger.handler
+      Role: !GetAtt CognitoAuthTriggerRole.Arn
+      MemorySize: 128
+      Timeout: 5
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            const attributes = event.request?.userAttributes || {};
+            const logEntry = {
+              timestamp: new Date().toISOString(),
+              triggerSource: event.triggerSource || "unknown",
+              sub: attributes.sub || null,
+              clientId: event.callerContext?.clientId || null
+            };
+            console.log(JSON.stringify(logEntry));
+            return event;
+          }
+      # Log only non-secret identifiers and event metadata.
+      # Do not log the complete Cognito event.
+      # Return the event unchanged so authentication continues normally.
 
   # Hosted UI so the frontend (#9) does not implement login screens
   # against Cognito directly — hosted domain handles sign-in, PKCE
@@ -104,6 +155,17 @@ Resources:
       # revealing which accounts exist.
       PreventUserExistenceErrors: ENABLED
 
+  # Allow Cognito to invoke the trigger Lambda.
+  # Permission is restricted to this specific User Pool.
+  CognitoAuthTriggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CognitoAuthTriggerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+      SourceAccount: !Ref AWS::AccountId
+
 Outputs:
   UserPoolId:
     Value: !Ref UserPool
@@ -123,3 +185,6 @@ Outputs:
     Value: !Sub "https://csep-${AWS::AccountId}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
     Export:
       Name: csep-auth-HostedUiDomain
+  CognitoAuthTriggerFunctionArn:
+    Description: Lambda ARN for Cognito authentication event logging
+    Value: !GetAtt CognitoAuthTriggerFunction.Arn
