@@ -31,22 +31,40 @@ TEMPLATE_DIR="$(dirname "$0")"
 : "${SUBNET_IDS:?Set SUBNET_IDS (two private subnets, comma-separated)}"
 : "${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN (https origin, no trailing slash)}"
 
+CFN_TEMPLATE_BUCKET=""
+
 deploy_stack() {
     local stack="$1"
     shift
+    local s3_args=()
+
+    if [ -n "${CFN_TEMPLATE_BUCKET}" ]; then
+        s3_args=(--s3-bucket "$CFN_TEMPLATE_BUCKET" --s3-prefix "cfn-templates")
+    fi
 
     echo "── Deploying ${stack} ──"
     aws cloudformation deploy \
         --region "$REGION" \
         --stack-name "$stack" \
         --template-file "$TEMPLATE_DIR/${stack#csep-}.yaml" \
+        "${s3_args[@]}" \
         "$@"
     echo "✓ ${stack}"
 }
 
-# 1. Artifact bucket — every other stack references it via import.
+# 1. Artifact bucket — every other stack references it via import, and
+#    templates exceeding CloudFormation's 51,200-byte inline limit (e.g.
+#    api.yaml) stage through it automatically.
 deploy_stack csep-artifact \
     --parameter-overrides "EnvironmentName=${ENV_NAME}"
+
+CFN_TEMPLATE_BUCKET=$(aws cloudformation list-exports \
+    --region "$REGION" \
+    --query "Exports[?Name=='csep-artifact-CodeBucketName'].Value | [0]" \
+    --output text)
+if [ "$CFN_TEMPLATE_BUCKET" = "None" ]; then
+    CFN_TEMPLATE_BUCKET=""
+fi
 
 # 2. Auth — Cognito pool + client; the API's JWT authorizer imports them.
 deploy_stack csep-auth \

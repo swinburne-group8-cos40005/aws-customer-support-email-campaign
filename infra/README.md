@@ -177,10 +177,13 @@ aws cloudformation deploy \
 ### 4. csep-api
 
 ```sh
-# Package the backend bundle first (built dist uploaded to the artifact bucket), then:
+# Package the backend bundle first (built dist uploaded to the artifact bucket), then
+# stage the template through S3 (infra/api.yaml exceeds the 51,200-byte inline limit):
 aws cloudformation deploy \
   --stack-name csep-api \
   --template-file infra/api.yaml \
+  --s3-bucket <artifact-bucket-name> \
+  --s3-prefix cfn-templates \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
