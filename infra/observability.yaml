@@ -205,6 +205,12 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/csep-worker-${EnvironmentName}
       RetentionInDays: !Ref LogRetentionDays
+     
+  CognitoAuthTriggerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/csep-cognito-auth-trigger-${EnvironmentName}
+      RetentionInDays: !Ref LogRetentionDays
 
   # CLOUDWATCH METRIC FILTERS
   # The ERROR pattern is retained from the existing template. Confirm that the
@@ -463,6 +469,38 @@ Resources:
           MetricValue: "1"
           DefaultValue: 0
 
+  # COGNITO AUTHENTICATION EVENT METRICS
+
+  CognitoSignInsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CognitoAuthTriggerLogGroup
+      FilterPattern: '{ $.triggerSource = "PostAuthentication_Authentication" }'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: CognitoSignIns
+          MetricValue: "1"
+
+  CognitoTokenGenerationsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CognitoAuthTriggerLogGroup
+      FilterPattern: '{ $.triggerSource = "PreTokenGeneration_Authentication" || $.triggerSource = "PreTokenGeneration_RefreshTokens" || $.triggerSource = "TokenGeneration_HostedAuth" }'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: CognitoTokenGenerations
+          MetricValue: "1"
+
+  CognitoPostConfirmationsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CognitoAuthTriggerLogGroup
+      FilterPattern: '{ $.triggerSource = "PostConfirmation_ConfirmSignUp" }'
+      MetricTransformations:
+        - MetricNamespace: CSEP/Application
+          MetricName: CognitoPostConfirmations
+          MetricValue: "1"
+
   # AUDIT FILTERS
   # Limited to user-initiated actions listed in the audit strategy.
   # Automated dispatcher/worker/SES event processing is not counted as an audit event.
@@ -715,6 +753,7 @@ Resources:
           {"type": "metric", "x": 12, "y": 23, "width": 12, "height": 6, "properties": {"title": "Campaign Lambda: duration (ms)", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Average", "period": 60, "metrics": [["AWS/Lambda", "Duration", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "Average", "stat": "Average"}], ["AWS/Lambda", "Duration", "FunctionName", "csep-create-campaign-${EnvironmentName}", {"label": "p95", "stat": "p95"}]]}},
           {"type": "metric", "x": 0, "y": 29, "width": 12, "height": 6, "properties": {"title": "Application log metrics (from log filters)", "view": "timeSeries", "stacked": false, "region": "${AWS::Region}", "stat": "Sum", "period": 60, "metrics": [["CSEP/Application", "LambdaErrors", {"label": "ERROR log lines", "color": "#d62728"}], ["CSEP/Application", "AuditEvents", {"label": "AUDIT log lines"}]]}},
           {"type": "alarm", "x": 12, "y": 29, "width": 12, "height": 6, "properties": {"title": "Alarm status", "alarms": ["${DLQDepthAlarm.Arn}", "${QueueAgeAlarm.Arn}", "${Api5xxAlarm.Arn}", "${LambdaErrorsAlarm.Arn}", "${LambdaThrottlesAlarm.Arn}"]}}
+          {"type": "metric", "x": 0, "y": 35, "width": 24, "height": 6, "properties": {"title": "Cognito authentication events","view": "timeSeries","stacked": false,"region": "${AWS::Region}","stat": "Sum","period": 300,"metrics": [["CSEP/Application","CognitoSignIns",{"label": "Successful sign-ins"}],["CSEP/Application","CognitoTokenGenerations",{"label": "Token generations"}],["CSEP/Application","CognitoPostConfirmations",{"label": "Post-confirmations"}]
         ]}
 
 Outputs:
