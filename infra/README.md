@@ -7,6 +7,7 @@ Templates implement ADR-0004 (CloudFormation YAML, stacks named `csep-<concern>`
 | Template | Stack | Contents | Status |
 | :--- | :--- | :--- | :--- |
 | `artifact.yaml` | `csep-artifact` | S3 bucket holding packaged Lambda bundles (versioned, private) | merged (#31) |
+| `cloudfront.yaml` | `csep-cloudfront` | Private frontend S3 bucket and CloudFront distribution | new |
 | `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | merged (#9) |
 | `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | merged (#4) |
 | `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | merged (#5) |
@@ -17,7 +18,7 @@ Templates implement ADR-0004 (CloudFormation YAML, stacks named `csep-<concern>`
 ## Deploy order
 
 ```
-csep-artifact  →  csep-auth  →  csep-data  →  schema bootstrap  →  csep-dispatcher  →  csep-feedback  →  csep-api  →  csep-observability
+csep-artifact  →  csep-cloudfront  →  csep-auth  →  csep-data  →  schema bootstrap  →  csep-dispatcher  →  csep-feedback  →  csep-api  →  csep-observability
 ```
 
 ### 0. csep-artifact
@@ -32,7 +33,40 @@ aws cloudformation deploy \
 
 `csep-artifact` owns the S3 bucket that stores packaged Lambda bundles. It is deployed first because `csep-api` imports the bucket name rather than receiving it as a deploy parameter. The bucket is disposable: deleting the stack deletes the stored packages, so re-upload a fresh bundle before redeploying `csep-api`. Versioning keeps recent bundles available for rollback; a lifecycle rule expires noncurrent versions after 30 days (ADR-0004 cost control).
 
-### 1. csep-auth
+### 1. csep-cloudfront
+
+```sh
+aws cloudformation deploy \
+  --stack-name csep-cloudfront \
+  --template-file infra/cloudfront.yaml \
+  --parameter-overrides \
+    EnvironmentName=dev
+```
+
+Build the frontend and upload the generated assets to the private bucket:
+
+```sh
+cd frontend
+pnpm install
+pnpm build
+BUCKET=$(aws cloudformation describe-stacks --stack-name csep-cloudfront \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue | [0]" --output text)
+aws s3 sync dist/ "s3://${BUCKET}/" --delete
+```
+
+After uploading a new build, invalidate the distribution if cached files should
+be refreshed immediately:
+
+```sh
+DISTRIBUTION_ID=$(aws cloudformation describe-stacks --stack-name csep-cloudfront \
+  --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue | [0]" --output text)
+aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
+```
+
+The `FrontendOrigin` output is the HTTPS CloudFront URL to use as `FrontendOrigin`
+when deploying `csep-auth` and `csep-api`.
+
+### 2. csep-auth
 
 ```sh
 aws cloudformation deploy \
@@ -41,13 +75,12 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
     EnvironmentName=dev \
-    CallbackUrls=http://localhost:5173 \
-    LogoutUrls=http://localhost:5173
+    FrontendOrigin=https://<distribution-domain>
 ```
 
 The hosted-UI domain prefix `csep-<account-id>-<env>` is globally unique. The `UserPoolId`, `UserPoolClientId`, and full hosted-login domain URL are exported for the API and frontend.
 
-### 2. csep-data
+### 3. csep-data
 
 ```sh
 aws cloudformation deploy \
@@ -127,7 +160,7 @@ aws cloudformation deploy \
 
    Stop the SSM session, terminate the EC2 instance, and delete its temporary security group. The Proxy is configured only with the `csep_app` secret; the master secret is not available to the Proxy or API Lambda.
 
-### 2. csep-dispatcher
+### 4. csep-dispatcher
 
 Upload the Dispatcher Lambda package to S3, then deploy the dispatch
 resources. No Worker or SES resources are created by this stack.
@@ -150,7 +183,7 @@ EventBridge Scheduler group and invocation role. Per-campaign schedules are crea
 is wired into the API; other stacks can import the exported Dispatcher ARN,
 queue values, and Scheduler values.
 
-### 3. csep-feedback
+### 5. csep-feedback
 
 Deploy this stack after `csep-data` has been bootstrapped and the separate
 email-sending stack has created its SNS topic. Pass that topic's ARN as
@@ -174,7 +207,7 @@ aws cloudformation deploy \
     VpcId=<vpc-id>
 ```
 
-### 4. csep-api
+### 6. csep-api
 
 ```sh
 # Package the backend bundle first (built dist uploaded to the artifact bucket), then:
@@ -186,12 +219,13 @@ aws cloudformation deploy \
     EnvironmentName=dev \
     ArtifactKey=<key> \
     SubnetIds=<subnet-a>,<subnet-b> \
-    VpcId=<vpc-id>
+    VpcId=<vpc-id> \
+    FrontendOrigin=https://<distribution-domain>
 ```
 
 `csep-api` imports the Cognito client ID and issuer, the database endpoint, name, and username, the artifact bucket name, and the Dispatcher Lambda ARN. Deploy `csep-dispatcher` first; the API `/send` function invokes that ARN asynchronously. The API role's invoke permission is scoped to that function. Its `rds-db:connect` grant is scoped to the RDS Proxy resource ID and the exact database user `csep_app`; the Lambda has no Secrets Manager permission or database password.
 
-### 5. csep-observability
+### 7. csep-observability
 
 Deploy after `csep-api` and `csep-dispatcher` exist: the alarms read the API
 ID and the send queue names, and the SNS topic needs a confirmed subscription.
