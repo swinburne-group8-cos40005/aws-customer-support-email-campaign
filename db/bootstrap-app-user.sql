@@ -1,6 +1,12 @@
-\getenv app_password CSEP_APP_PASSWORD
+-- Direct IAM authentication (Free-Plan RDS PostgreSQL without RDS Proxy):
+-- csep_app signs in using short-lived IAM tokens granted via rds_iam.
+CREATE ROLE csep_app LOGIN;
+GRANT rds_iam TO csep_app;
 
-CREATE ROLE csep_app LOGIN PASSWORD :'app_password';
+-- Original password-based role creation (used when RDS Proxy holds a secret):
+-- \getenv app_password CSEP_APP_PASSWORD
+-- CREATE ROLE csep_app LOGIN PASSWORD :'app_password';
+
 GRANT CONNECT ON DATABASE csep TO csep_app;
 GRANT USAGE ON SCHEMA public TO csep_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE

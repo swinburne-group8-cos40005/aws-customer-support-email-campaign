@@ -1,11 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  csep-data stack (ADR-0004). Provisions the Aurora Serverless v2
-  PostgreSQL cluster and the RDS Proxy that sits in front of it
-  (ADR-0005). API clients authenticate to the Proxy with IAM tokens
-  as a dedicated application user; the Proxy uses that user's
-  Secrets Manager credential to authenticate to Aurora. The master
-  credential is reserved for one-off schema bootstrap.
+  csep-data stack (ADR-0004). Free-Plan compatible PostgreSQL setup:
+  provisions a Single-AZ RDS PostgreSQL instance (db.t4g.micro) with
+  direct IAM database authentication for the csep_app role. The original
+  Aurora Serverless v2 + RDS Proxy resources (ADR-0003/0005) are retained
+  commented out below for paid accounts.
 
 Parameters:
   EnvironmentName:
@@ -17,10 +16,10 @@ Parameters:
     Description: VPC hosting the database
   VpcCidrBlock:
     Type: String
-    Description: CIDR of VpcId; used to allow in-VPC clients to reach the Proxy
+    Description: CIDR of VpcId; used to allow in-VPC clients to reach PostgreSQL
   SubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
-    Description: At least two private subnets in different Availability Zones
+    Description: At least two subnets in different Availability Zones for the DBSubnetGroup
   DbName:
     Type: String
     Default: csep
@@ -34,16 +33,32 @@ Parameters:
     Default: ""
     Description: Optional temporary SSM host security group; clear after schema and app-user bootstrap.
     AllowedPattern: "^(sg-[0-9a-f]{8,17})?$"
-  MinACU:
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: Free-Tier-eligible Single-AZ PostgreSQL instance class
+  AllocatedStorage:
     Type: Number
-    Default: 2
-    MinValue: 0.5
-    MaxValue: 128
-  MaxACU:
+    Default: 20
+    MinValue: 20
+    MaxValue: 100
+  BackupRetentionPeriod:
     Type: Number
-    Default: 8
-    MinValue: 1
-    MaxValue: 128
+    Default: 1
+    MinValue: 0
+    MaxValue: 35
+    Description: Free-Plan RDS accounts cap automated backup retention at 1 day.
+  # Aurora Serverless v2 scaling parameters (disabled for AWS Free Plan):
+  # MinACU:
+  #   Type: Number
+  #   Default: 2
+  #   MinValue: 0.5
+  #   MaxValue: 128
+  # MaxACU:
+  #   Type: Number
+  #   Default: 8
+  #   MinValue: 1
+  #   MaxValue: 128
   DeletionProtection:
     Type: String
     Default: "false"
@@ -57,33 +72,21 @@ Resources:
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Subnets for the csep Aurora cluster and RDS Proxy
+      DBSubnetGroupDescription: Subnets for the csep PostgreSQL database
       SubnetIds: !Ref SubnetIds
 
-  # Proxy accepts in-VPC clients; direct cluster access is limited to
-  # the Proxy and, temporarily, the one-off SSM bootstrap host.
-  ProxySecurityGroup:
+  # Allows in-VPC Lambdas (and optionally the temporary SSM bootstrap host)
+  # to connect to PostgreSQL on port 5432.
+  ClusterSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Sub csep-proxy-ingress-${EnvironmentName}
+      GroupDescription: !Sub csep-postgres-ingress-${EnvironmentName}
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
           CidrIp: !Ref VpcCidrBlock
-
-  # The cluster normally accepts connections only from the Proxy.
-  ClusterSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub csep-aurora-ingress-${EnvironmentName}
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !GetAtt ProxySecurityGroup.GroupId
         - !If
           - HasBootstrapSecurityGroup
           - IpProtocol: tcp
@@ -92,141 +95,171 @@ Resources:
             SourceSecurityGroupId: !Ref BootstrapSecurityGroupId
           - !Ref AWS::NoValue
 
-  AuroraCluster:
-    Type: AWS::RDS::DBCluster
-    Properties:
-      Engine: aurora-postgresql
-      EngineVersion: "15.12"
-      EngineMode: provisioned # Serverless v2 is provisioned mode + scaling config
-      ServerlessV2ScalingConfiguration:
-        MinCapacity: !Ref MinACU
-        MaxCapacity: !Ref MaxACU
-      DatabaseName: !Ref DbName
-      MasterUsername: !Ref MasterDbUsername
-      # D2 (issue #22): the master password is generated, stored and
-      # rotatable by Secrets Manager — never printed or echoed.
-      ManageMasterUserPassword: true
-      DBSubnetGroupName: !Ref DbSubnetGroup
-      VpcSecurityGroupIds:
-        - !GetAtt ClusterSecurityGroup.GroupId
-      StorageEncrypted: true
-      DeletionProtection: !Ref DeletionProtection
-      BackupRetentionPeriod: 7
-
-  AuroraInstance:
+  # Free-Plan RDS PostgreSQL Single-AZ instance with direct IAM auth
+  # (replaces Aurora Serverless v2 + RDS Proxy when running on AWS Free Plan).
+  DatabaseInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceClass: db.serverless
-      Engine: aurora-postgresql
-      DBClusterIdentifier: !Ref AuroraCluster
-      DBSubnetGroupName: !Ref DbSubnetGroup
+      DBInstanceIdentifier: !Sub csep-postgres-${EnvironmentName}
+      DBInstanceClass: !Ref DbInstanceClass
+      Engine: postgres
+      EngineVersion: "15.16"
+      AllocatedStorage: !Ref AllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: false
       PubliclyAccessible: false
+      DBName: !Ref DbName
+      MasterUsername: !Ref MasterDbUsername
+      ManageMasterUserPassword: true
+      EnableIAMDatabaseAuthentication: true
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt ClusterSecurityGroup.GroupId
+      DeletionProtection: !Ref DeletionProtection
 
-  ApplicationDbSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub "csep/${EnvironmentName}/application-db"
-      Description: Password for the dedicated csep_app application database role
-      GenerateSecretString:
-        SecretStringTemplate: '{"username":"csep_app"}'
-        GenerateStringKey: password
-        PasswordLength: 32
-
-  # Lets the Proxy read only the application credential from Secrets Manager.
-  ProxyRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub csep-proxy-role-${EnvironmentName}
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CsepProxySecretAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                  - secretsmanager:DescribeSecret
-                Resource:
-                  - !Ref ApplicationDbSecret
-              - Effect: Allow
-                Action: kms:Decrypt
-                Resource: "*"
-                # Needed when the secret uses the default KMS key.
-                # Tighten to the specific key ARN once known.
-
-  CampaignDBProxy:
-    Type: AWS::RDS::DBProxy
-    Properties:
-      DBProxyName: !Sub csep-proxy-${EnvironmentName}
-      EngineFamily: POSTGRESQL
-      # Clients authenticate as the dedicated application user with
-      # IAM tokens; the Proxy uses its managed secret to reach Aurora.
-      Auth:
-        - AuthScheme: SECRETS
-          SecretArn: !Ref ApplicationDbSecret
-          IAMAuth: REQUIRED
-      RequireTLS: true
-      RoleArn: !GetAtt ProxyRole.Arn
-      VpcSecurityGroupIds:
-        - !GetAtt ProxySecurityGroup.GroupId
-      VpcSubnetIds: !Ref SubnetIds
-      IdleClientTimeout: 600
-
-  ProxyTargetGroup:
-    Type: AWS::RDS::DBProxyTargetGroup
-    Properties:
-      DBProxyName: !Ref CampaignDBProxy
-      TargetGroupName: default
-      DBClusterIdentifiers:
-        - !Ref AuroraCluster
-      ConnectionPoolConfigurationInfo:
-        MaxConnectionsPercent: 80
-        ConnectionBorrowTimeout: 120
+  # ---------------------------------------------------------------------------
+  # Original Aurora Serverless v2 + RDS Proxy resources (ADR-0003 / ADR-0005).
+  # Commented out for AWS Free Plan compatibility (Free Plan caps Aurora at
+  # 4 ACUs / 1-day backup retention, requires WithExpressConfiguration, and
+  # excludes RDS Proxy). Uncomment on a paid AWS account if reverting to Proxy.
+  # ---------------------------------------------------------------------------
+  #
+  # ProxySecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: !Sub csep-proxy-ingress-${EnvironmentName}
+  #     VpcId: !Ref VpcId
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 5432
+  #         ToPort: 5432
+  #         CidrIp: !Ref VpcCidrBlock
+  #
+  # ClusterSecurityGroup (Aurora-only ingress from ProxySecurityGroup):
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 5432
+  #         ToPort: 5432
+  #         SourceSecurityGroupId: !GetAtt ProxySecurityGroup.GroupId
+  #
+  # AuroraCluster:
+  #   Type: AWS::RDS::DBCluster
+  #   Properties:
+  #     Engine: aurora-postgresql
+  #     EngineVersion: "15.12"
+  #     EngineMode: provisioned # Serverless v2 is provisioned mode + scaling config
+  #     ServerlessV2ScalingConfiguration:
+  #       MinCapacity: !Ref MinACU
+  #       MaxCapacity: !Ref MaxACU
+  #     DatabaseName: !Ref DbName
+  #     MasterUsername: !Ref MasterDbUsername
+  #     ManageMasterUserPassword: true
+  #     DBSubnetGroupName: !Ref DbSubnetGroup
+  #     VpcSecurityGroupIds:
+  #       - !GetAtt ClusterSecurityGroup.GroupId
+  #     StorageEncrypted: true
+  #     DeletionProtection: !Ref DeletionProtection
+  #     BackupRetentionPeriod: 7
+  #
+  # AuroraInstance:
+  #   Type: AWS::RDS::DBInstance
+  #   Properties:
+  #     DBInstanceClass: db.serverless
+  #     Engine: aurora-postgresql
+  #     DBClusterIdentifier: !Ref AuroraCluster
+  #     DBSubnetGroupName: !Ref DbSubnetGroup
+  #     PubliclyAccessible: false
+  #
+  # ApplicationDbSecret:
+  #   Type: AWS::SecretsManager::Secret
+  #   Properties:
+  #     Name: !Sub "csep/${EnvironmentName}/application-db"
+  #     Description: Password for the dedicated csep_app application database role
+  #     GenerateSecretString:
+  #       SecretStringTemplate: '{"username":"csep_app"}'
+  #       GenerateStringKey: password
+  #       PasswordLength: 32
+  #
+  # ProxyRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: !Sub csep-proxy-role-${EnvironmentName}
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: rds.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     Policies:
+  #       - PolicyName: CsepProxySecretAccess
+  #         PolicyDocument:
+  #           Version: "2012-10-17"
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - secretsmanager:GetSecretValue
+  #                 - secretsmanager:DescribeSecret
+  #               Resource:
+  #                 - !Ref ApplicationDbSecret
+  #             - Effect: Allow
+  #               Action: kms:Decrypt
+  #               Resource: "*"
+  #
+  # CampaignDBProxy:
+  #   Type: AWS::RDS::DBProxy
+  #   Properties:
+  #     DBProxyName: !Sub csep-proxy-${EnvironmentName}
+  #     EngineFamily: POSTGRESQL
+  #     Auth:
+  #       - AuthScheme: SECRETS
+  #         SecretArn: !Ref ApplicationDbSecret
+  #         IAMAuth: REQUIRED
+  #     RequireTLS: true
+  #     RoleArn: !GetAtt ProxyRole.Arn
+  #     VpcSecurityGroupIds:
+  #       - !GetAtt ProxySecurityGroup.GroupId
+  #     VpcSubnetIds: !Ref SubnetIds
+  #     IdleClientTimeout: 600
+  #
+  # ProxyTargetGroup:
+  #   Type: AWS::RDS::DBProxyTargetGroup
+  #   Properties:
+  #     DBProxyName: !Ref CampaignDBProxy
+  #     TargetGroupName: default
+  #     DBClusterIdentifiers:
+  #       - !Ref AuroraCluster
+  #     ConnectionPoolConfigurationInfo:
+  #       MaxConnectionsPercent: 80
+  #       ConnectionBorrowTimeout: 120
 
 Outputs:
+  # Export names kept identical to the RDS Proxy layout so downstream stacks
+  # (csep-api, csep-dispatcher, csep-feedback) require no template changes.
   DBProxyEndpoint:
-    Description: Hostname Lambdas connect to (with IAM auth + TLS)
-    Value: !GetAtt CampaignDBProxy.Endpoint
+    Description: Database hostname Lambdas connect to (with IAM auth + TLS)
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: csep-data-DBProxyEndpoint
-  DBProxyArn:
-    Description: RDS Proxy ARN
-    Value: !GetAtt CampaignDBProxy.DBProxyArn
-    Export:
-      Name: csep-data-DBProxyArn
   DBProxyUserArn:
     Description: IAM database-user resource ARN for the dedicated application user
     Value: !Sub
-      - "arn:${AWS::Partition}:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${ProxyResourceId}/csep_app"
-      - ProxyResourceId: !Select
-          - 1
-          - !Split
-            - "db-proxy:"
-            - !GetAtt CampaignDBProxy.DBProxyArn
+      - "arn:${AWS::Partition}:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${DbiResourceId}/csep_app"
+      - DbiResourceId: !GetAtt DatabaseInstance.DbiResourceId
     Export:
       Name: csep-data-DBProxyUserArn
   ClusterWriterEndpoint:
-    Description: Writer endpoint for bootstrap only; applications use the Proxy
-    Value: !GetAtt AuroraCluster.Endpoint.Address
+    Description: Writer endpoint for schema bootstrap
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: csep-data-ClusterWriterEndpoint
   DBSecretArn:
     Description: Secrets Manager entry holding the administrative master credential
-    Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+    Value: !GetAtt DatabaseInstance.MasterUserSecret.SecretArn
     Export:
       Name: csep-data-DBSecretArn
-  DBAppSecretArn:
-    Description: Generated application-user password used by the Proxy
-    Value: !Ref ApplicationDbSecret
-    Export:
-      Name: csep-data-DBAppSecretArn
   DbName:
     Value: !Ref DbName
     Export:
@@ -236,3 +269,30 @@ Outputs:
     Value: csep_app
     Export:
       Name: csep-data-DbUsername
+  # Original Aurora + RDS Proxy outputs (kept commented with their resources):
+  # DBProxyEndpoint:
+  #   Value: !GetAtt CampaignDBProxy.Endpoint
+  #   Export:
+  #     Name: csep-data-DBProxyEndpoint
+  # DBProxyArn:
+  #   Value: !GetAtt CampaignDBProxy.DBProxyArn
+  #   Export:
+  #     Name: csep-data-DBProxyArn
+  # DBProxyUserArn:
+  #   Value: !Sub
+  #     - "arn:${AWS::Partition}:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${ProxyResourceId}/csep_app"
+  #     - ProxyResourceId: !Select [1, !Split ["db-proxy:", !GetAtt CampaignDBProxy.DBProxyArn]]
+  #   Export:
+  #     Name: csep-data-DBProxyUserArn
+  # ClusterWriterEndpoint:
+  #   Value: !GetAtt AuroraCluster.Endpoint.Address
+  #   Export:
+  #     Name: csep-data-ClusterWriterEndpoint
+  # DBSecretArn:
+  #   Value: !GetAtt AuroraCluster.MasterUserSecret.SecretArn
+  #   Export:
+  #     Name: csep-data-DBSecretArn
+  # DBAppSecretArn:
+  #   Value: !Ref ApplicationDbSecret
+  #   Export:
+  #     Name: csep-data-DBAppSecretArn
