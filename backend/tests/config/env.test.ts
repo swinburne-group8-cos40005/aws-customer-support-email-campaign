@@ -1,4 +1,4 @@
-import { loadDatabaseEnv } from '#config/env';
+import { loadDatabaseEnv, loadEmailCooldownHours } from '#config/env';
 
 
 
@@ -20,6 +20,25 @@ describe('loadDatabaseEnv', () => {
             DB_USER: 'csep_app',
             AWS_REGION: 'ap-southeast-2',
         });
+    });
+
+    describe('loadEmailCooldownHours', () => {
+        test('defaults to 24 hours', () => {
+            expect(loadEmailCooldownHours({})).toBe(24);
+        });
+
+        test('accepts zero to disable cooldown and parses configured integer hours', () => {
+            expect(loadEmailCooldownHours({ EMAIL_COOLDOWN_HOURS: '0' })).toBe(0);
+            expect(loadEmailCooldownHours({ EMAIL_COOLDOWN_HOURS: '12' })).toBe(12);
+        });
+
+        test.each(['', '-1', '1.5', 'not-a-number', '9007199254740992'])(
+            'rejects invalid cooldown value %p',
+            (value) => {
+                expect(() => loadEmailCooldownHours({ EMAIL_COOLDOWN_HOURS: value }))
+                    .toThrow('Invalid Dispatcher configuration');
+            },
+        );
     });
 
     test('iam mode: explicit DB_PORT is coerced to a number', () => {

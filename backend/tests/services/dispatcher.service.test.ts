@@ -37,6 +37,13 @@ const recipient: DispatchRecipientRow = {
     email: 'person@example.com',
 };
 
+const audience = {
+    recipients: [recipient],
+    segmentRecipientCount: 1,
+    suppressedRecipientCount: 0,
+    cooldownSkippedCount: 0,
+};
+
 const job = (index: number): DispatchJobRow => ({
     email_log_id: index === 0
         ? EMAIL_LOG_ID
@@ -53,7 +60,7 @@ const dependencies = (
 ): DispatcherDependencies => ({
     withCampaignDispatchLock: async (_campaignId, operation) => operation(session),
     claimCampaignForDispatch: jest.fn().mockResolvedValue(campaign),
-    listEligibleDispatchRecipients: jest.fn().mockResolvedValue([recipient]),
+    resolveDispatchAudience: jest.fn().mockResolvedValue(audience),
     seedPendingDispatchLogs: jest.fn().mockResolvedValue(undefined),
     listPendingDispatchJobs: jest.fn().mockResolvedValue([job(0)]),
     markDispatchLogsQueued: jest.fn().mockResolvedValue(undefined),
@@ -79,6 +86,7 @@ describe('dispatchCampaign', () => {
                 deps,
             );
 
+            expect(deps.resolveDispatchAudience).toHaveBeenCalledWith(SEGMENT_ID, 24, session);
             expect(deps.claimCampaignForDispatch).toHaveBeenCalledWith(CAMPAIGN_ID, dispatchMode, session);
             expect(deps.seedPendingDispatchLogs).toHaveBeenCalledWith(CAMPAIGN_ID, [recipient], session);
             expect(deps.sendQueueBatch).toHaveBeenCalledWith([
@@ -97,7 +105,13 @@ describe('dispatchCampaign', () => {
 
     test('completes campaigns with no eligible recipients without sending SQS messages', async () => {
         const deps = dependencies({
-            listEligibleDispatchRecipients: jest.fn().mockResolvedValue([]),
+            resolveDispatchAudience: jest.fn().mockResolvedValue({
+                ...audience,
+                recipients: [],
+                segmentRecipientCount: 1,
+                suppressedRecipientCount: 0,
+                cooldownSkippedCount: 1,
+            }),
             listPendingDispatchJobs: jest.fn().mockResolvedValue([]),
         });
 
@@ -109,6 +123,45 @@ describe('dispatchCampaign', () => {
         expect(deps.sendQueueBatch).not.toHaveBeenCalled();
         expect(deps.completeCampaignDispatch).toHaveBeenCalledWith(CAMPAIGN_ID, session);
         expect(result).toEqual({ campaignId: CAMPAIGN_ID, status: 'completed', queued: 0 });
+    });
+
+    test('logs separate audience exclusion and final enqueue counts', async () => {
+        const info = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+        let infoCalls: unknown[][];
+        const deps = dependencies({
+            resolveDispatchAudience: jest.fn().mockResolvedValue({
+                ...audience,
+                recipients: [],
+                segmentRecipientCount: 4,
+                suppressedRecipientCount: 1,
+                cooldownSkippedCount: 3,
+            }),
+            listPendingDispatchJobs: jest.fn().mockResolvedValue([]),
+        });
+
+        try {
+            await dispatchCampaign({ campaignId: CAMPAIGN_ID, dispatchMode: 'immediate' }, deps);
+        } finally {
+            infoCalls = info.mock.calls;
+            info.mockRestore();
+        }
+
+        expect(infoCalls[0]).toEqual(['Dispatcher audience resolved', {
+            campaignId: CAMPAIGN_ID,
+            totalSegmentRecipients: 4,
+            suppressedRecipients: 1,
+            cooldownSkippedRecipients: 3,
+            eligibleRecipients: 0,
+            cooldownHours: 24,
+        }]);
+        expect(infoCalls[1]).toEqual(['Dispatcher campaign completed', {
+            campaignId: CAMPAIGN_ID,
+            totalSegmentRecipients: 4,
+            suppressedRecipients: 1,
+            cooldownSkippedRecipients: 3,
+            eligibleRecipients: 0,
+            enqueuedRecipients: 0,
+        }]);
     });
 
     test('chunks at ten messages and retries only partial failures', async () => {

@@ -31,6 +31,12 @@ Parameters:
     Description: >
       SQS visibility timeout in seconds. Align with the consumer processing
       duration when its Lambda is provisioned.
+  EmailCooldownHours:
+    Type: String
+    Default: "24"
+    AllowedPattern: "^[0-9]+$"
+    Description: Recent queued, sent, or delivered contact window in hours; 0 disables cooldown.
+    ConstraintDescription: Must be a non-negative integer number of hours.
 
 Resources:
   DeadLetterQueue:
@@ -119,6 +125,7 @@ Resources:
             Fn::ImportValue: csep-data-DbName
           DB_USER:
             Fn::ImportValue: csep-data-DbUsername
+          EMAIL_COOLDOWN_HOURS: !Ref EmailCooldownHours
       VpcConfig:
         SecurityGroupIds:
           - !GetAtt DispatcherSecurityGroup.GroupId

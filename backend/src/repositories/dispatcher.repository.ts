@@ -23,6 +23,13 @@ export interface DispatchRecipientRow {
     email: string;
 }
 
+export interface DispatchAudience {
+    recipients: DispatchRecipientRow[];
+    segmentRecipientCount: number;
+    suppressedRecipientCount: number;
+    cooldownSkippedCount: number;
+}
+
 export interface DispatchJobRow {
     email_log_id: string;
     campaign_id: string;
@@ -87,25 +94,75 @@ export const claimCampaignForDispatch = async (
  * email_suppressions as the opt-out state; customers has no is_subscribed
  * column (db/schema.sql).
  */
-export const listEligibleDispatchRecipients = async (
+export const resolveDispatchAudience = async (
     segmentId: string,
+    cooldownHours: number,
     session: DatabaseSession,
-): Promise<DispatchRecipientRow[]> => {
+): Promise<DispatchAudience> => {
     const result = await session.query(
-        `SELECT c.customer_id, c.email
-         FROM customer_segments cs
-         JOIN customers c ON c.customer_id = cs.customer_id
-         WHERE cs.segment_id = $1
-           AND NOT EXISTS (
-               SELECT 1
-               FROM email_suppressions s
-               WHERE s.email_normalized = lower(trim(c.email))
-           )
-         ORDER BY c.customer_id`,
-        [segmentId],
+        `WITH segment_audience AS (
+             SELECT c.customer_id,
+                    c.email,
+                    EXISTS (
+                        SELECT 1
+                        FROM email_suppressions s
+                        WHERE s.email_normalized = lower(trim(c.email))
+                    ) AS is_suppressed,
+                    EXISTS (
+                        SELECT 1
+                        FROM email_logs l
+                        WHERE l.customer_id = c.customer_id
+                          AND l.send_status IN ('queued', 'sent', 'delivered')
+                          AND l.updated_at >= NOW() - make_interval(hours => $2)
+                    ) AS recently_contacted
+             FROM customer_segments cs
+             JOIN customers c ON c.customer_id = cs.customer_id
+             WHERE cs.segment_id = $1
+         ),
+         audience_counts AS (
+             SELECT COUNT(*)::int AS segment_recipient_count,
+                    COUNT(*) FILTER (WHERE is_suppressed)::int AS suppressed_recipient_count,
+                    COUNT(*) FILTER (
+                        WHERE NOT is_suppressed AND recently_contacted
+                    )::int AS cooldown_skipped_count
+             FROM segment_audience
+         )
+         SELECT counts.segment_recipient_count,
+                counts.suppressed_recipient_count,
+                counts.cooldown_skipped_count,
+                COALESCE(
+                    (
+                        SELECT json_agg(
+                            json_build_object('customer_id', a.customer_id, 'email', a.email)
+                            ORDER BY a.customer_id
+                        )
+                        FROM segment_audience a
+                        WHERE NOT a.is_suppressed
+                          AND ($2 = 0 OR NOT a.recently_contacted)
+                    ),
+                    '[]'::json
+                ) AS recipients
+         FROM audience_counts counts`,
+        [segmentId, cooldownHours],
     );
 
-    return result.rows as unknown as DispatchRecipientRow[];
+    const row = result.rows[0] as unknown as {
+        recipients: DispatchRecipientRow[];
+        segment_recipient_count: number;
+        suppressed_recipient_count: number;
+        cooldown_skipped_count: number;
+    } | undefined;
+
+    if (!row) {
+        throw new Error('Dispatcher audience query returned no summary row');
+    }
+
+    return {
+        recipients: row.recipients,
+        segmentRecipientCount: row.segment_recipient_count,
+        suppressedRecipientCount: row.suppressed_recipient_count,
+        cooldownSkippedCount: row.cooldown_skipped_count,
+    };
 };
 
 /** Seeds one deterministic email log per customer, ignoring prior attempts. */

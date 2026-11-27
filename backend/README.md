@@ -92,10 +92,13 @@ package root. The handler path is `dispatcher.handler`, matching
 
 The Dispatcher locks by campaign ID, seeds `pending` email logs with the
 schema's SHA-256 idempotency key, filters members found in
-`email_suppressions`, sends SQS batches of at most 10, and marks successful
-messages `queued`. The current database schema does not define
-`customers.is_subscribed`; suppression-table membership is the opt-out
-source of truth.
+`email_suppressions`, and skips customers with a `queued`, `sent`, or
+`delivered` log updated within `EMAIL_COOLDOWN_HOURS` (default 24; `0`
+disables the cooldown). It sends SQS batches of at most 10 and marks
+successful messages `queued`. Structured logs report segment, suppression,
+cooldown-skip, eligible, and enqueued counts. The current database schema does
+not define `customers.is_subscribed`; suppression-table membership is the
+opt-out source of truth.
 
 The EventHandler consumes SNS-wrapped SES `Delivery`, `Bounce`, and
 `Complaint` notifications from `FeedbackQueue`. It matches `mail.messageId`
