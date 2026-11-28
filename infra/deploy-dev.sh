@@ -31,22 +31,40 @@ TEMPLATE_DIR="$(dirname "$0")"
 : "${SUBNET_IDS:?Set SUBNET_IDS (two private subnets, comma-separated)}"
 : "${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN (https origin, no trailing slash)}"
 
+CFN_TEMPLATE_BUCKET=""
+
 deploy_stack() {
     local stack="$1"
     shift
+    local s3_args=()
+
+    if [ -n "${CFN_TEMPLATE_BUCKET}" ]; then
+        s3_args=(--s3-bucket "$CFN_TEMPLATE_BUCKET" --s3-prefix "cfn-templates")
+    fi
 
     echo "── Deploying ${stack} ──"
     aws cloudformation deploy \
         --region "$REGION" \
         --stack-name "$stack" \
         --template-file "$TEMPLATE_DIR/${stack#csep-}.yaml" \
+        "${s3_args[@]}" \
         "$@"
     echo "✓ ${stack}"
 }
 
-# 1. Artifact bucket — every other stack references it via import.
+# 1. Artifact bucket — every other stack references it via import, and
+#    templates exceeding CloudFormation's 51,200-byte inline limit (e.g.
+#    api.yaml) stage through it automatically.
 deploy_stack csep-artifact \
     --parameter-overrides "EnvironmentName=${ENV_NAME}"
+
+CFN_TEMPLATE_BUCKET=$(aws cloudformation list-exports \
+    --region "$REGION" \
+    --query "Exports[?Name=='csep-artifact-CodeBucketName'].Value | [0]" \
+    --output text)
+if [ "$CFN_TEMPLATE_BUCKET" = "None" ]; then
+    CFN_TEMPLATE_BUCKET=""
+fi
 
 # 2. Auth — Cognito pool + client; the API's JWT authorizer imports them.
 deploy_stack csep-auth \
@@ -59,7 +77,7 @@ deploy_stack csep-auth \
 #    Leave BootstrapSecurityGroupId empty for the normal run; set it only
 #    while executing infra/README.md, step 2 (schema bootstrap).
 deploy_stack csep-data \
-    --capabilities CAPABILITY_IAM \
+    --capabilities CAPABILITY_NAMED_IAM \
     --parameter-overrides \
         "EnvironmentName=${ENV_NAME}" \
         "VpcId=${VPC_ID}" \
@@ -74,7 +92,7 @@ deploy_stack csep-data \
 #    Deploy before csep-api because the /send function imports its ARN.
 if [ -f "${TEMPLATE_DIR}/dispatcher.yaml" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
     deploy_stack csep-dispatcher \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "DispatcherArtifactKey=${DISPATCHER_ARTIFACT_KEY}" \
@@ -88,7 +106,7 @@ fi
 #    Requires csep-dispatcher to exist because /send invokes its Lambda.
 if [ -n "${ARTIFACT_KEY:-}" ] && [ -n "${DISPATCHER_ARTIFACT_KEY:-}" ]; then
     deploy_stack csep-api \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "ArtifactKey=${ARTIFACT_KEY}" \
@@ -105,7 +123,7 @@ if [ -f "${TEMPLATE_DIR}/feedback.yaml" ] \
     && [ -n "${EVENT_HANDLER_ARTIFACT_KEY:-}" ] \
     && [ -n "${SNS_TOPIC_ARN:-}" ]; then
     deploy_stack csep-feedback \
-        --capabilities CAPABILITY_IAM \
+        --capabilities CAPABILITY_NAMED_IAM \
         --parameter-overrides \
             "EnvironmentName=${ENV_NAME}" \
             "ArtifactKey=${EVENT_HANDLER_ARTIFACT_KEY}" \

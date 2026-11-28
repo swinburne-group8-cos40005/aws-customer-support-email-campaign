@@ -1,4 +1,5 @@
 import type {
+    DispatchAudience,
     DispatchCampaignRow,
     DispatchJobRow,
     DispatchMode,
@@ -6,13 +7,15 @@ import type {
 } from '#repositories/dispatcher.repository';
 import type { DatabaseSession } from '#db/connection';
 
+import { loadEmailCooldownHours } from '#config/env';
+
 import {
     claimCampaignForDispatch,
     completeCampaignDispatch,
     failCampaignDispatch,
-    listEligibleDispatchRecipients,
     listPendingDispatchJobs,
     markDispatchLogsQueued,
+    resolveDispatchAudience,
     seedPendingDispatchLogs,
     withCampaignDispatchLock,
 } from '#repositories/dispatcher.repository';
@@ -52,10 +55,11 @@ export interface DispatcherDependencies {
         mode: DispatchMode,
         session: DatabaseSession,
     ): Promise<DispatchCampaignRow | null>;
-    listEligibleDispatchRecipients(
+    resolveDispatchAudience(
         segmentId: string,
+        cooldownHours: number,
         session: DatabaseSession,
-    ): Promise<DispatchRecipientRow[]>;
+    ): Promise<DispatchAudience>;
     seedPendingDispatchLogs(
         campaignId: string,
         recipients: DispatchRecipientRow[],
@@ -71,7 +75,7 @@ export interface DispatcherDependencies {
 const _defaultDependencies: DispatcherDependencies = {
     withCampaignDispatchLock,
     claimCampaignForDispatch,
-    listEligibleDispatchRecipients,
+    resolveDispatchAudience,
     seedPendingDispatchLogs,
     listPendingDispatchJobs,
     markDispatchLogsQueued,
@@ -164,6 +168,8 @@ export const dispatchCampaign = async (
     trigger: DispatchTrigger,
     dependencies: DispatcherDependencies = _defaultDependencies,
 ): Promise<{ campaignId: string; status: 'completed' | 'ignored'; queued: number }> => {
+    const cooldownHours = loadEmailCooldownHours();
+
     return dependencies.withCampaignDispatchLock(trigger.campaignId, async (session) => {
         const campaign = await dependencies.claimCampaignForDispatch(
             trigger.campaignId,
@@ -179,7 +185,21 @@ export const dispatchCampaign = async (
         }
 
         try {
-            const recipients = await dependencies.listEligibleDispatchRecipients(campaign.segment_id, session);
+            const audience = await dependencies.resolveDispatchAudience(
+                campaign.segment_id,
+                cooldownHours,
+                session,
+            );
+            console.info('Dispatcher audience resolved', {
+                campaignId: campaign.campaign_id,
+                totalSegmentRecipients: audience.segmentRecipientCount,
+                suppressedRecipients: audience.suppressedRecipientCount,
+                cooldownSkippedRecipients: audience.cooldownSkippedCount,
+                eligibleRecipients: audience.recipients.length,
+                cooldownHours,
+            });
+
+            const recipients = audience.recipients;
             await dependencies.seedPendingDispatchLogs(campaign.campaign_id, recipients, session);
 
             const jobs = await dependencies.listPendingDispatchJobs(campaign.campaign_id, session);
@@ -188,6 +208,14 @@ export const dispatchCampaign = async (
             }
 
             await dependencies.completeCampaignDispatch(campaign.campaign_id, session);
+            console.info('Dispatcher campaign completed', {
+                campaignId: campaign.campaign_id,
+                totalSegmentRecipients: audience.segmentRecipientCount,
+                suppressedRecipients: audience.suppressedRecipientCount,
+                cooldownSkippedRecipients: audience.cooldownSkippedCount,
+                eligibleRecipients: recipients.length,
+                enqueuedRecipients: jobs.length,
+            });
             return { campaignId: campaign.campaign_id, status: 'completed', queued: jobs.length };
         } catch (error) {
             try {

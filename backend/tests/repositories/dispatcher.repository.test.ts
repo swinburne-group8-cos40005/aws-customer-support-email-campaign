@@ -7,9 +7,9 @@ import {
     claimCampaignForDispatch,
     completeCampaignDispatch,
     failCampaignDispatch,
-    listEligibleDispatchRecipients,
     listPendingDispatchJobs,
     markDispatchLogsQueued,
+    resolveDispatchAudience,
     seedPendingDispatchLogs,
     withCampaignDispatchLock,
 } from '#repositories/dispatcher.repository';
@@ -47,21 +47,103 @@ beforeEach(() => {
 });
 
 describe('dispatcher repository', () => {
-    test('resolves segment members while filtering suppressed emails in SQL', async () => {
+    test('resolves segment recipients and reports suppression and cooldown counts', async () => {
         tx.query.mockResolvedValue({
-            rows: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            rows: [{
+                recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+                segment_recipient_count: 3,
+                suppressed_recipient_count: 1,
+                cooldown_skipped_count: 1,
+            }],
             rowCount: 1,
         });
 
-        await listEligibleDispatchRecipients(SEGMENT_ID, session);
+        await expect(resolveDispatchAudience(SEGMENT_ID, 24, session)).resolves.toEqual({
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            segmentRecipientCount: 3,
+            suppressedRecipientCount: 1,
+            cooldownSkippedCount: 1,
+        });
 
         const [sql, values] = tx.query.mock.calls[0] as [string, unknown[]];
         expect(sql).toContain('FROM customer_segments cs');
-        expect(sql).toContain('NOT EXISTS');
         expect(sql).toContain('FROM email_suppressions s');
         expect(sql).toContain('lower(trim(c.email))');
+        expect(sql).toContain("l.send_status IN ('queued', 'sent', 'delivered')");
+        expect(sql).toContain("l.updated_at >= NOW() - make_interval(hours => $2)");
+        expect(sql).toContain('($2 = 0 OR NOT a.recently_contacted)');
         expect(sql).not.toContain('is_subscribed');
-        expect(values).toEqual([SEGMENT_ID]);
+        expect(values).toEqual([SEGMENT_ID, 24]);
+    });
+
+    test.each(['queued', 'sent', 'delivered'] as const)(
+        'uses recent %s logs for cooldown filtering',
+        async (status) => {
+            tx.query.mockResolvedValue({ rows: [{
+                recipients: [],
+                segment_recipient_count: 1,
+                suppressed_recipient_count: 0,
+                cooldown_skipped_count: 1,
+            }] });
+
+            await resolveDispatchAudience(SEGMENT_ID, 24, session);
+
+            const [sql] = tx.query.mock.calls[0] as [string];
+            expect(sql).toContain(`'${status}'`);
+            expect(sql).toContain('l.updated_at >= NOW() - make_interval(hours => $2)');
+        },
+    );
+
+    test('keeps recipients when their relevant log timestamp is outside the cooldown window', async () => {
+        tx.query.mockResolvedValue({ rows: [{
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            segment_recipient_count: 1,
+            suppressed_recipient_count: 0,
+            cooldown_skipped_count: 0,
+        }] });
+
+        await expect(resolveDispatchAudience(SEGMENT_ID, 24, session)).resolves.toMatchObject({
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            cooldownSkippedCount: 0,
+        });
+
+        const [sql, values] = tx.query.mock.calls[0] as [string, unknown[]];
+        expect(sql).toContain('l.updated_at >= NOW() - make_interval(hours => $2)');
+        expect(values).toEqual([SEGMENT_ID, 24]);
+    });
+
+    test('does not count failed-only logs as cooldown contacts', async () => {
+        tx.query.mockResolvedValue({ rows: [{
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            segment_recipient_count: 1,
+            suppressed_recipient_count: 0,
+            cooldown_skipped_count: 0,
+        }] });
+
+        await expect(resolveDispatchAudience(SEGMENT_ID, 24, session)).resolves.toMatchObject({
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            cooldownSkippedCount: 0,
+        });
+
+        const [sql] = tx.query.mock.calls[0] as [string];
+        expect(sql).toContain("l.send_status IN ('queued', 'sent', 'delivered')");
+        expect(sql).not.toContain("'failed'");
+    });
+
+    test('includes customers without recent non-failed logs and disables cooldown at zero hours', async () => {
+        tx.query.mockResolvedValue({ rows: [{
+            recipients: [{ customer_id: CUSTOMER_ID, email: 'person@example.com' }],
+            segment_recipient_count: 1,
+            suppressed_recipient_count: 0,
+            cooldown_skipped_count: 0,
+        }] });
+
+        await resolveDispatchAudience(SEGMENT_ID, 0, session);
+
+        const [sql, values] = tx.query.mock.calls[0] as [string, unknown[]];
+        expect(sql).toContain("l.send_status IN ('queued', 'sent', 'delivered')");
+        expect(sql).toContain('($2 = 0 OR NOT a.recently_contacted)');
+        expect(values).toEqual([SEGMENT_ID, 0]);
     });
 
     test('seeds pending logs using deterministic keys and ignores duplicate keys', async () => {

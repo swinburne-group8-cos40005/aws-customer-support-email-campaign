@@ -1,15 +1,15 @@
-import { useState, type FormEvent } from "react"
+import { useState } from "react"
+import { AddSegmentButton } from "@/components/ui/AddSegmentButton"
 import { Icon } from "@/components/ui/Icon"
 import { PageIntro } from "@/components/ui/PageIntro"
-import { Button } from "@/components/ui/Button"
-import { campaignApi, type ApiSegment, type CustomerPreferences } from "@/lib/api"
+import { type ApiSegment, type CreateSegmentBody } from "@/lib/api"
 
 export function AudiencePage({
   segments,
-  onReload,
+  onCreateSegment,
 }: {
   segments: ApiSegment[]
-  onReload: () => Promise<void>
+  onCreateSegment: (body: CreateSegmentBody) => Promise<ApiSegment>
 }) {
   const [search, setSearch] = useState("")
   const [segmentName, setSegmentName] = useState("")
@@ -88,10 +88,26 @@ export function AudiencePage({
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-[#E3E1E7] bg-white">
         <div className="border-b border-[#ECEAEF] p-5 sm:flex sm:items-center sm:justify-between">
-          <div><h2 className="text-sm font-semibold text-[#302D37]">Segments</h2><p className="mt-1 text-xs text-[#625E6B]">{segments.length} audience {segments.length === 1 ? "segment" : "segments"}</p></div>
-          <div className="relative mt-3 sm:mt-0">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#625E6B]"><Icon name="search" size={15} /></span>
-            <input className="h-9 w-full rounded-[9px] border border-[#E1DFE5] bg-white pl-9 pr-3 text-xs outline-none focus:border-[#EF4444] sm:w-[220px]" onChange={(event) => setSearch(event.target.value)} placeholder="Search segments" value={search} />
+          <div>
+            <h2 className="text-sm font-semibold text-[#302D37]">Segments</h2>
+            <p className="mt-1 text-xs text-[#625E6B]">
+              {segments.length} audience{" "}
+              {segments.length === 1 ? "segment" : "segments"}
+            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 sm:mt-0">
+            <AddSegmentButton onCreate={onCreateSegment} />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#625E6B]">
+                <Icon name="search" size={15} />
+              </span>
+              <input
+                className="h-9 w-full rounded-[9px] border border-[#E1DFE5] bg-white pl-9 pr-3 text-xs outline-none focus:border-[#EF4444] sm:w-[220px]"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search segments"
+                value={search}
+              />
+            </div>
           </div>
         </div>
         {visible.length > 0 ? <div className="divide-y divide-[#ECEAEF]">

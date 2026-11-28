@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AudienceStep } from "@/components/campaign/AudienceStep"
 import { CampaignFooter } from "@/components/campaign/CampaignFooter"
 import { CampaignHeader } from "@/components/campaign/CampaignHeader"
@@ -9,6 +9,15 @@ import { Stepper } from "@/components/campaign/Stepper"
 import { TemplateStep } from "@/components/campaign/TemplateStep"
 import { REVIEW_STEP } from "@/data/campaignSteps"
 import { type CampaignDraft } from "@/hooks/useCampaignDraft"
+
+function getTemplateBody(bodyText: string | null, bodyHtml: string | null) {
+  if (bodyText !== null) return bodyText
+  if (bodyHtml === null) return ""
+  return (
+    new DOMParser().parseFromString(bodyHtml, "text/html").body.textContent ??
+    ""
+  )
+}
 
 export function CampaignPage({
   draft,
@@ -26,11 +35,30 @@ export function CampaignPage({
   const [scheduleDate, setScheduleDate] = useState("")
   const [scheduleTime, setScheduleTime] = useState("")
   const [submitted, setSubmitted] = useState(false)
+  const [subject, setSubject] = useState("")
+  const [body, setBody] = useState("")
 
   const selectedTemplate = draft.templates.find(
     (template) => template.templateId === draft.templateId,
   )
+  const reviewTemplate = selectedTemplate
+    ? {
+        ...selectedTemplate,
+        subjectTemplate: subject,
+        bodyHtml: null,
+        bodyText: body,
+      }
+    : undefined
   const recipients = draft.preview?.netAudience ?? 0
+
+  useEffect(() => {
+    setSubject(selectedTemplate?.subjectTemplate ?? "")
+    setBody(
+      selectedTemplate
+        ? getTemplateBody(selectedTemplate.bodyText, selectedTemplate.bodyHtml)
+        : "",
+    )
+  }, [selectedTemplate])
 
   async function continueWizard() {
     if (step + 1 === REVIEW_STEP) {
@@ -77,12 +105,18 @@ export function CampaignPage({
 
       <main className="mx-auto w-full max-w-[1114px] flex-1 px-5 py-8 sm:px-8 sm:py-10">
         {draft.loadError && (
-          <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
+          <p
+            className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+            role="alert"
+          >
             {draft.loadError}
           </p>
         )}
         {draft.error && (
-          <p className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700" role="alert">
+          <p
+            className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+            role="alert"
+          >
             {draft.error}
           </p>
         )}
@@ -98,8 +132,10 @@ export function CampaignPage({
           <SetupStep
             name={draft.campaignName}
             setName={draft.setCampaignName}
-            subject={selectedTemplate?.subjectTemplate ?? ""}
-            setSubject={() => {}}
+            subject={subject}
+            setSubject={setSubject}
+            body={body}
+            setBody={setBody}
           />
         )}
         {step === 2 && (
@@ -108,12 +144,13 @@ export function CampaignPage({
             selected={draft.segmentId}
             preview={draft.preview}
             onSelect={draft.setSegmentId}
+            onCreateSegment={draft.createSegment}
           />
         )}
         {step === REVIEW_STEP && (
           <ReviewStep
             campaignName={draft.campaignName}
-            template={selectedTemplate}
+            template={reviewTemplate}
             recipients={recipients}
             sendMode={sendMode}
             setSendMode={setSendMode}

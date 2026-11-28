@@ -22,7 +22,8 @@
         "build:dispatcher": "node scripts/build-dispatcher.mjs",
         "typecheck": "tsc --noEmit",
         "test": "jest",
-        "test:coverage": "jest --coverage"
+        "test:coverage": "jest --coverage",
+        "package": "node scripts/package.mjs"
     },
     "dependencies": {
         "@aws-sdk/client-lambda": "^3.1175.0",

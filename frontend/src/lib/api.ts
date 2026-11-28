@@ -190,6 +190,12 @@ export type ApiSegment = {
   description: string | null
 }
 
+export type CreateSegmentBody = {
+    name: string
+    description?: string
+    rules: Record<string, unknown>
+}
+
 export type SegmentPreview = {
   segmentId: string
   segmentName: string

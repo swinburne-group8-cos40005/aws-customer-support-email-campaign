@@ -33,6 +33,12 @@ const localModeSchema = z.object({
     DATABASE_URL: z.string().min(1, 'DATABASE_URL must not be empty'),
 });
 
+const emailCooldownHoursSchema = z
+    .string()
+    .regex(/^\d+$/, 'EMAIL_COOLDOWN_HOURS must be a non-negative integer')
+    .transform(Number)
+    .pipe(z.number().int().nonnegative().safe());
+
 export type IamEnv = z.infer<typeof iamModeSchema> & { mode: 'iam' };
 export type LocalEnv = { mode: 'local'; databaseUrl: string };
 export type Env = IamEnv | LocalEnv;
@@ -78,4 +84,13 @@ export const loadDatabaseEnv = (source: NodeJS.ProcessEnv = process.env): Env =>
     ].join(' — or — ');
 
     throw new Error(`Database environment is not configured. Expected ${expected}`);
+};
+
+export const loadEmailCooldownHours = (source: NodeJS.ProcessEnv = process.env): number => {
+    const result = emailCooldownHoursSchema.safeParse(source.EMAIL_COOLDOWN_HOURS ?? '24');
+    if (!result.success) {
+        throw new Error(`Invalid Dispatcher configuration: ${result.error.message}`);
+    }
+
+    return result.data;
 };
