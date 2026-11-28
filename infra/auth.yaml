@@ -44,6 +44,50 @@ Resources:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
+      LambdaConfig:
+        PostAuthentication: !GetAtt CognitoAuthTriggerFunction.Arn
+        PreTokenGeneration: !GetAtt CognitoAuthTriggerFunction.Arn
+        PostConfirmation: !GetAtt CognitoAuthTriggerFunction.Arn
+
+  CognitoAuthTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  CognitoAuthTriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub csep-cognito-auth-trigger-${EnvironmentName}
+      Description: Logs safe Cognito authentication lifecycle events.
+      Runtime: nodejs24.x
+      Handler: index.handler
+      Role: !GetAtt CognitoAuthTriggerRole.Arn
+      MemorySize: 128
+      Timeout: 5
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            const attributes = event.request?.userAttributes || {};
+            const logEntry = {
+              timestamp: new Date().toISOString(),
+              triggerSource: event.triggerSource || "unknown",
+              sub: attributes.sub || null,
+              clientId: event.callerContext?.clientId || null
+            };
+            console.log(JSON.stringify(logEntry));
+            return event;
+          }
+      # Log only non-secret identifiers and event metadata.
+      # Do not log the complete Cognito event.
+      # Return the event unchanged so authentication continues normally.
 
   # The hosted domain remains the OAuth refresh-token endpoint. Interactive
   # sign-in and registration are handled directly by the frontend using SRP.
@@ -76,12 +120,14 @@ Resources:
         - COGNITO
       CallbackURLs: !If
         - AllowLocalhost
-        - [!Ref FrontendOrigin, "http://localhost:5173"]
-        - [!Ref FrontendOrigin]
+        - - !Ref FrontendOrigin
+          - "http://localhost:5173"
+        - - !Ref FrontendOrigin
       LogoutURLs: !If
         - AllowLocalhost
-        - [!Ref FrontendOrigin, "http://localhost:5173"]
-        - [!Ref FrontendOrigin]
+        - - !Ref FrontendOrigin
+          - "http://localhost:5173"
+        - - !Ref FrontendOrigin
       TokenValidityUnits:
         AccessToken: hours
         IdToken: hours
@@ -100,6 +146,17 @@ Resources:
       # Return a generic error for wrong-username attempts instead of
       # revealing which accounts exist.
       PreventUserExistenceErrors: ENABLED
+
+  # Allow Cognito to invoke the trigger Lambda.
+  # Permission is restricted to this specific User Pool.
+  CognitoAuthTriggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt CognitoAuthTriggerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+      SourceAccount: !Ref AWS::AccountId
 
 Outputs:
   UserPoolId:
@@ -120,3 +177,6 @@ Outputs:
     Value: !Sub "https://csep-${AWS::AccountId}-${EnvironmentName}.auth.${AWS::Region}.amazoncognito.com"
     Export:
       Name: csep-auth-HostedUiDomain
+  CognitoAuthTriggerFunctionArn:
+    Description: Lambda ARN for Cognito authentication event logging
+    Value: !GetAtt CognitoAuthTriggerFunction.Arn
