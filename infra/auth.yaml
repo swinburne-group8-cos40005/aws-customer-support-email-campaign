@@ -121,6 +121,16 @@ Resources:
         - profile
       SupportedIdentityProviders:
         - COGNITO
+      CallbackURLs: !If
+        - AllowLocalhost
+        - - !Ref FrontendOrigin
+          - "http://localhost:5173"
+        - - !Ref FrontendOrigin
+      LogoutURLs: !If
+        - AllowLocalhost
+        - - !Ref FrontendOrigin
+          - "http://localhost:5173"
+        - - !Ref FrontendOrigin
       TokenValidityUnits:
         AccessToken: hours
         IdToken: hours
