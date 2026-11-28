@@ -1522,14 +1522,14 @@ Outputs:
     Value: !GetAtt HttpApi.ApiEndpoint
     Export:
       Name: csep-api-ApiEndpoint
-  # Single runtime-config object for the SPA (#9): read via DescribeStacks
-  # at boot instead of assembling three separate exports. Fn::ImportValue
+  # Single runtime-config object for the SPA: read via DescribeStacks
+  # at boot instead of assembling separate exports. Fn::ImportValue
   # values feed the Fn::Sub map because Fn::Sub cannot resolve import
   # names directly.
   FrontendConfig:
-    Description: Runtime config for the SPA — cognitoClientId, cognitoDomain, apiBaseUrl
+    Description: Runtime config for the SPA — cognitoUserPoolId, cognitoClientId, cognitoDomain, apiBaseUrl
     Value: !Sub
-      - '{"cognitoClientId":"${Client}","cognitoDomain":"${Domain}","apiBaseUrl":"${Api}"}'
+      - '{"cognitoUserPoolId":"${Pool}","cognitoClientId":"${Client}","cognitoDomain":"${Domain}","apiBaseUrl":"${Api}"}'
       - Client:
           # W6001 warns that imported outputs create an update-ordering
           # dependency on csep-auth. That is inherent to cross-stack
@@ -1537,6 +1537,8 @@ Outputs:
           # both stacks) and acceptable: csep-auth's exports change only
           # with the stacks that consume them.
           Fn::ImportValue: csep-auth-UserPoolClientId
+        Pool:
+          Fn::ImportValue: csep-auth-UserPoolId
         Domain:
           Fn::ImportValue: csep-auth-HostedUiDomain
         Api: !GetAtt HttpApi.ApiEndpoint

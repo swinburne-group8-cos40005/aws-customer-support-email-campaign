@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/services/auth";
+import { getIdToken } from "@/services/auth";
 
 export type AuditLog = {
   audit_log_id: string;
@@ -182,11 +182,11 @@ async function getRealAuditLogs(
     throw new Error("API_BASE_URL is not configured.");
   }
 
-  const token = await getAccessToken();
+  const token = await getIdToken();
 
   if (!token) {
     throw new Error(
-      "Authentication unavailable. Please sign in through Cognito before using the real API."
+      "Authentication unavailable. Please sign in before using the real API."
     );
   }
 

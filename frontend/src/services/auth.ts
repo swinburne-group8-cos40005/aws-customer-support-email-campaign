@@ -1,24 +1,21 @@
 /**
- * Central access-token provider.
+ * Central ID-token provider for API requests.
  *
- * Cognito integration can register a provider when it becomes available.
- * Until then, API mode will report that authentication is unavailable.
+ * Cognito ID tokens carry the app-client audience required by the API authorizer.
  */
 
-export type AccessTokenProvider = () => Promise<string | null>;
+export type IdTokenProvider = () => Promise<string | null>;
 
-let accessTokenProvider: AccessTokenProvider | null = null;
+let idTokenProvider: IdTokenProvider | null = null;
 
-export function registerAccessTokenProvider(
-  provider: AccessTokenProvider
-): void {
-  accessTokenProvider = provider;
+export function registerIdTokenProvider(provider: IdTokenProvider): void {
+  idTokenProvider = provider;
 }
 
-export async function getAccessToken(): Promise<string | null> {
-  if (!accessTokenProvider) {
+export async function getIdToken(): Promise<string | null> {
+  if (!idTokenProvider) {
     return null;
   }
 
-  return accessTokenProvider();
+  return idTokenProvider();
 }

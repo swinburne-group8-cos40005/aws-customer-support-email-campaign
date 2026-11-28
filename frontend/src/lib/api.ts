@@ -1,4 +1,4 @@
-import { beginSignIn, getAccessToken, refreshAccessToken } from "@/lib/auth"
+import { getIdToken, refreshAccessToken } from "@/lib/auth"
 import { config } from "@/lib/config"
 
 export class ApiError extends Error {
@@ -18,13 +18,17 @@ async function send<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers)
     if (init.body) headers.set("Content-Type", "application/json")
 
-    let accessToken: string
+    let idToken: string | null
     try { 
-        accessToken = await getAccessToken()
-    } catch {
-        await beginSignIn()
-        throw new ApiError("Redirecting to sign in.", "AUTH_REQUIRED", 401)
+        idToken = await getIdToken()
+    } catch (cause) {
+        throw new ApiError(
+            cause instanceof Error ? cause.message : "Your session has expired. Sign in again.",
+            "AUTH_REQUIRED",
+            401,
+        )
     }
+    if (!idToken) throw new ApiError("Sign in is required.", "AUTH_REQUIRED", 401)
 
     const request = (token: string) =>
         fetch(url, {
@@ -35,16 +39,20 @@ async function send<T>(path: string, init: RequestInit = {}): Promise<T> {
             ]),
         })
 
-    let response = await request(accessToken)
+    let response = await request(idToken)
 
     if (response.status === 401) {
         try {
-            accessToken = await refreshAccessToken()
-        } catch {
-            await beginSignIn()
-            throw new ApiError("Your session expired. Redirecting to sign in.", "AUTH_REQUIRED", 401)
+            await refreshAccessToken()
+            idToken = await getIdToken()
+        } catch (cause) {
+            throw new ApiError(
+                cause instanceof Error ? cause.message : "Your session has expired. Sign in again.",
+                "AUTH_REQUIRED",
+                401,
+            )
         }
-        response = await request(accessToken)
+        if (idToken) response = await request(idToken)
     }
 
     const text = await response.text()
@@ -56,7 +64,6 @@ async function send<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
 
     if (response.status === 401) {
-        await beginSignIn()
         throw new ApiError("Sign in is required.", "AUTH_REQUIRED", 401)
     }
 

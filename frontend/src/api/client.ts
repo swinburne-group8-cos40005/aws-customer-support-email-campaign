@@ -5,6 +5,8 @@
  * ApiRequestError so screens can show the server's own message.
  */
 
+import { getIdToken as getCognitoIdToken } from "@/lib/auth"
+
 const TOKEN_KEY = "csep.idToken"
 
 export class ApiRequestError extends Error {
@@ -24,7 +26,10 @@ export function getApiBaseUrl(): string {
 }
 
 /** The Cognito ID token for this browser session (sessionStorage, then the dev env fallback). */
-export function getIdToken(): string | null {
+export async function getIdToken(): Promise<string | null> {
+  const cognitoToken = await getCognitoIdToken()
+  if (cognitoToken) return cognitoToken
+
   try {
     const stored = sessionStorage.getItem(TOKEN_KEY)
     if (stored) return stored
@@ -49,7 +54,7 @@ export async function apiGet<T>(
   path: string,
   options: { query?: Record<string, string | number | undefined>; signal?: AbortSignal } = {},
 ): Promise<T> {
-  const token = getIdToken()
+  const token = await getIdToken()
   if (!token) {
     throw new ApiRequestError(401, "UNAUTHENTICATED", "You are not signed in to the API.")
   }

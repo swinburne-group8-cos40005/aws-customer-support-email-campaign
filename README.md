@@ -9,8 +9,8 @@ service and all infrastructure as code.
 ## Architecture
 
 ```
-browser (frontend, in progress)
-   │  Cognito hosted UI (PKCE)
+browser (frontend)
+   │  Cognito SRP sign-in / registration
    ▼
 csep-auth ── Cognito user pool + app client
    │  JWT

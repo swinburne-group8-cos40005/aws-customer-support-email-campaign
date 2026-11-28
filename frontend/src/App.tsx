@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react"
 import { LoginPage } from "@/pages/LoginPage"
 import { Workspace } from "@/Workspace"
-import { beginSignIn, initializeAuth, signOut } from "@/lib/auth"
+import {
+  confirmSignUp,
+  getIdToken,
+  initializeAuth,
+  resendConfirmationCode,
+  signIn,
+  signOut,
+  signUp,
+} from "@/lib/auth"
+import { registerIdTokenProvider } from "@/services/auth"
 
 let authInitialization: Promise<boolean> | undefined
+registerIdTokenProvider(getIdToken)
 
 export default function App() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
@@ -45,12 +55,14 @@ export default function App() {
     <LoginPage
       darkMode={darkMode}
       error={error}
-      onLogin={() => {
+      onSignIn={async (email, password) => {
         setError("")
-        void beginSignIn().catch((cause: unknown) => {
-          setError(cause instanceof Error ? cause.message : "Could not start sign-in.")
-        })
+        await signIn(email, password)
+        setLoggedIn(true)
       }}
+      onSignUp={signUp}
+      onConfirmSignUp={confirmSignUp}
+      onResendConfirmationCode={resendConfirmationCode}
       onToggleTheme={toggleTheme}
     />
   )
