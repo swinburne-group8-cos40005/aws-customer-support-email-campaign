@@ -1,6 +1,8 @@
 import { Icon } from "@/components/ui/Icon"
+import { AddSegmentButton } from "@/components/ui/AddSegmentButton"
 import {
   type ApiSegment,
+  type CreateSegmentBody,
   type SegmentPreview,
 } from "@/lib/api"
 
@@ -9,11 +11,13 @@ export function AudienceStep({
   selected,
   preview,
   onSelect,
+  onCreateSegment,
 }: {
   segments: ApiSegment[]
   selected: string
   preview: SegmentPreview | null
   onSelect: (id: string) => void
+  onCreateSegment: (body: CreateSegmentBody) => Promise<ApiSegment>
 }) {
   const currentPreview =
     preview?.segmentId === selected ? preview : null
@@ -28,7 +32,13 @@ export function AudienceStep({
           Select an audience segment to preview its live recipient estimate.
         </p>
 
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 mb-3 flex justify-end">
+          <AddSegmentButton
+            onCreate={onCreateSegment}
+            onCreated={(segment) => onSelect(segment.segmentId)}
+          />
+        </div>
+        <div className="space-y-3">
           {segments.map((segment) => (
             <button
               className={`flex w-full items-center gap-4 rounded-xl border bg-white p-4 text-left ${

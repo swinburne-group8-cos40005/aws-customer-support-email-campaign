@@ -67,7 +67,10 @@ export function Workspace({
             />
           )}
           {view === "audience" && (
-            <AudiencePage segments={draft.segments} />
+            <AudiencePage
+              segments={draft.segments}
+              onCreateSegment={draft.createSegment}
+            />
           )}
           {view === "settings" && (
             <SettingsPage

@@ -86,6 +86,12 @@ export type ApiSegment = {
     description: string | null
 }
 
+export type CreateSegmentBody = {
+    name: string
+    description?: string
+    rules: Record<string, unknown>
+}
+
 export type SegmentPreview = {
     segmentId: string
     segmentName: string
@@ -125,6 +131,10 @@ export const campaignApi = {
 
     async segments(): Promise<ApiSegment[]> {
         return (await send<{ data: ApiSegment[] }>("/segments")).data
+    },
+
+    createSegment(body: CreateSegmentBody): Promise<ApiSegment> {
+        return send("/segments", { method: "POST", body: JSON.stringify(body) })
     },
 
     previewSegment(segmentId: string): Promise<SegmentPreview> {

@@ -1,9 +1,16 @@
 import { useState } from "react"
+import { AddSegmentButton } from "@/components/ui/AddSegmentButton"
 import { Icon } from "@/components/ui/Icon"
 import { PageIntro } from "@/components/ui/PageIntro"
-import { type ApiSegment } from "@/lib/api"
+import { type ApiSegment, type CreateSegmentBody } from "@/lib/api"
 
-export function AudiencePage({ segments }: { segments: ApiSegment[] }) {
+export function AudiencePage({
+  segments,
+  onCreateSegment,
+}: {
+  segments: ApiSegment[]
+  onCreateSegment: (body: CreateSegmentBody) => Promise<ApiSegment>
+}) {
   const [search, setSearch] = useState("")
   const visible = segments.filter((segment) =>
     `${segment.name} ${segment.description ?? ""}`
@@ -28,16 +35,19 @@ export function AudiencePage({ segments }: { segments: ApiSegment[] }) {
               {segments.length === 1 ? "segment" : "segments"}
             </p>
           </div>
-          <div className="relative mt-3 sm:mt-0">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#625E6B]">
-              <Icon name="search" size={15} />
-            </span>
-            <input
-              className="h-9 w-full rounded-[9px] border border-[#E1DFE5] bg-white pl-9 pr-3 text-xs outline-none focus:border-[#EF4444] sm:w-[220px]"
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search segments"
-              value={search}
-            />
+          <div className="mt-3 flex flex-wrap items-center gap-3 sm:mt-0">
+            <AddSegmentButton onCreate={onCreateSegment} />
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#625E6B]">
+                <Icon name="search" size={15} />
+              </span>
+              <input
+                className="h-9 w-full rounded-[9px] border border-[#E1DFE5] bg-white pl-9 pr-3 text-xs outline-none focus:border-[#EF4444] sm:w-[220px]"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search segments"
+                value={search}
+              />
+            </div>
           </div>
         </div>
 

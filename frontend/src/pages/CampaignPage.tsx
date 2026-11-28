@@ -144,6 +144,7 @@ export function CampaignPage({
             selected={draft.segmentId}
             preview={draft.preview}
             onSelect={draft.setSegmentId}
+            onCreateSegment={draft.createSegment}
           />
         )}
         {step === REVIEW_STEP && (

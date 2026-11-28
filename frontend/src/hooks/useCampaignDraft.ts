@@ -4,6 +4,7 @@ import {
   type ApiSegment,
   type ApiTemplate,
   type Campaign,
+  type CreateSegmentBody,
   type SegmentPreview,
 } from "@/lib/api"
 
@@ -18,6 +19,12 @@ export function useCampaignDraft() {
   const [loadError, setLoadError] = useState("")
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+
+  async function createSegment(body: CreateSegmentBody): Promise<ApiSegment> {
+    const segment = await campaignApi.createSegment(body)
+    setSegments((current) => [segment, ...current])
+    return segment
+  }
 
   useEffect(() => {
     let active = true
@@ -86,6 +93,7 @@ export function useCampaignDraft() {
   return {
     templates,
     segments,
+    createSegment,
     templateId,
     setTemplateId,
     segmentId,
