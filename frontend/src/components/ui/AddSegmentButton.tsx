@@ -2,10 +2,6 @@ import { useState, type FormEvent } from "react"
 import { Icon } from "@/components/ui/Icon"
 import { type ApiSegment, type CreateSegmentBody } from "@/lib/api"
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 export function AddSegmentButton({
   onCreate,
   onCreated,
@@ -16,7 +12,6 @@ export function AddSegmentButton({
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [rules, setRules] = useState("{}")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -29,30 +24,16 @@ export function AddSegmentButton({
     event.preventDefault()
     setError("")
 
-    let parsedRules: unknown
-    try {
-      parsedRules = JSON.parse(rules)
-    } catch {
-      setError("Enter valid JSON for the audience rules.")
-      return
-    }
-
-    if (!isRecord(parsedRules)) {
-      setError("Audience rules must be a JSON object.")
-      return
-    }
-
     setSaving(true)
     try {
       const segment = await onCreate({
         name: name.trim(),
         description: description.trim() || undefined,
-        rules: parsedRules,
+        rules: {},
       })
       onCreated?.(segment)
       setName("")
       setDescription("")
-      setRules("{}")
       close()
     } catch (cause) {
       setError(
@@ -96,7 +77,7 @@ export function AddSegmentButton({
               Add custom audience segment
             </h2>
             <p className="mt-1 text-sm text-[#625E6B]">
-              Define a name and audience rules for this segment.
+              Define a name and optional description for this segment.
             </p>
             <form className="mt-5 space-y-4" onSubmit={submit}>
               <label className="block text-xs font-medium text-[#403D48]">
@@ -117,15 +98,6 @@ export function AddSegmentButton({
                   maxLength={2000}
                   onChange={(event) => setDescription(event.target.value)}
                   value={description}
-                />
-              </label>
-              <label className="block text-xs font-medium text-[#403D48]">
-                Audience rules (JSON)
-                <textarea
-                  className="mt-1.5 min-h-24 w-full rounded-lg border border-[#E1DFE5] p-3 font-mono text-xs outline-none focus:border-[#EF4444]"
-                  onChange={(event) => setRules(event.target.value)}
-                  required
-                  value={rules}
                 />
               </label>
               {error && (
