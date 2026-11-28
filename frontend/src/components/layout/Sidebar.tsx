@@ -1,17 +1,25 @@
 import { Icon } from "@/components/ui/Icon"
 import { Logo } from "@/components/ui/Logo"
 import { navItems } from "@/data/navItems"
-import { type AppView } from "@/types"
+import { type AppView, type WorkspaceSettings } from "@/types"
 
 export function Sidebar({
   onLogout,
   view,
   onViewChange,
+  workspaceSettings,
 }: {
   onLogout: () => void
   view: AppView
   onViewChange: (view: AppView) => void
+  workspaceSettings: WorkspaceSettings
 }) {
+  const initials = workspaceSettings.fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "?"
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[232px] border-r border-[#E8E6ED] bg-white px-4 py-6 lg:flex lg:flex-col">
       <div className="px-2">
@@ -61,11 +69,11 @@ export function Sidebar({
       <div className="mt-auto rounded-xl bg-[#F7F6F9] p-3">
         <div className="flex items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-[#D8F7E5] text-xs font-bold text-black">
-            TH
+            {initials}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-semibold text-[#33313F]">
-              Trong Hieu
+              {workspaceSettings.fullName || "Unnamed user"}
             </p>
             <p className="truncate text-[11px] text-[#625E6B]">Administrator</p>
           </div>

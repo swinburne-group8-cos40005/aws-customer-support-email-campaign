@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AppShell } from "@/components/layout/AppShell"
 import { SectionHeader } from "@/components/layout/SectionHeader"
 import { defaultWorkspaceSettings } from "@/data/defaultSettings"
@@ -23,10 +23,30 @@ export function Workspace({
   onToggleTheme: () => void
 }) {
   const [view, setView] = useState<AppView>("campaign")
-  const [workspaceSettings, setWorkspaceSettings] = useState<WorkspaceSettings>(
-    defaultWorkspaceSettings,
-  )
+  const [workspaceSettings, setWorkspaceSettings] =
+    useState<WorkspaceSettings>(() => {
+      try {
+        const stored = localStorage.getItem("postly.workspaceSettings")
+        return stored
+          ? { ...defaultWorkspaceSettings, ...JSON.parse(stored) }
+          : defaultWorkspaceSettings
+      } catch {
+        return defaultWorkspaceSettings
+      }
+    })
   const draft = useCampaignDraft()
+
+  useEffect(() => {
+    localStorage.setItem(
+      "postly.workspaceSettings",
+      JSON.stringify(workspaceSettings),
+    )
+  }, [workspaceSettings])
+
+  const saveSettings = (settings: WorkspaceSettings) => {
+    setWorkspaceSettings(settings)
+    localStorage.setItem("postly.workspaceSettings", JSON.stringify(settings))
+  }
 
   return (
     <AppShell
@@ -34,11 +54,13 @@ export function Workspace({
       onLogout={onLogout}
       onViewChange={setView}
       view={view}
+      workspaceSettings={workspaceSettings}
     >
       {view === "campaign" ? (
         <CampaignPage
           darkMode={darkMode}
           draft={draft}
+          settings={workspaceSettings}
           onOpenSettings={() => setView("settings")}
           onToggleTheme={onToggleTheme}
         />
@@ -74,7 +96,7 @@ export function Workspace({
           )}
           {view === "settings" && (
             <SettingsPage
-              onSave={setWorkspaceSettings}
+              onSave={saveSettings}
               settings={workspaceSettings}
             />
           )}
