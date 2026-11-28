@@ -1,11 +1,9 @@
-import { useState } from "react"
-import { setIdToken, type ApiRequestError } from "@/api/client"
+import { beginSignIn } from "@/lib/auth"
+import { type ApiRequestError } from "@/api/client"
 import { Button } from "@/components/ui/Button"
 
 /**
- * Error panel with a retry. For 401s it offers a way to supply a Cognito
- * ID token, because the sign-in screen is still a prototype: the token is
- * kept in sessionStorage only and is gone when the tab closes.
+ * Error panel with a retry. For 401s it offers a way to restart Cognito sign-in.
  */
 export function ErrorState({
   error,
