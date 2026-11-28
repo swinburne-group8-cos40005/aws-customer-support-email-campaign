@@ -64,6 +64,7 @@ export function Workspace({
               selected={draft.templateId}
               onSelect={draft.setTemplateId}
               onUseTemplate={() => setView("campaign")}
+              onReload={draft.reloadTemplates}
             />
           )}
           {view === "audience" && (

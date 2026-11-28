@@ -40,7 +40,7 @@ export function useApiResource<T>(
         setError(
           err instanceof ApiRequestError
             ? err
-            : new ApiRequestError(0, "UNKNOWN", "Something went wrong while loading the data."),
+            : new ApiRequestError("Something went wrong while loading the data.", "UNKNOWN", 0),
         )
         setLoading(false)
       })
