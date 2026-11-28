@@ -18,7 +18,7 @@ describe("Cognito authentication trigger", () => {
     triggerSource: string
   ): CognitoUserPoolTriggerEvent =>
     ({
-      version: "1",
+      version: 1,
       region: "ap-southeast-2",
       userPoolId: "ap-southeast-2_example",
       userName: "test-user",
