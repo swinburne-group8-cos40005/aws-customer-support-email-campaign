@@ -71,6 +71,7 @@ export function Workspace({
             <AudiencePage
               segments={draft.segments}
               onCreateSegment={draft.createSegment}
+              onReload={draft.reloadSegments}
             />
           )}
           {view === "settings" && (

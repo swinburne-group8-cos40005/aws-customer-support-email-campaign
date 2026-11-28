@@ -1,15 +1,23 @@
-import { useState } from "react"
+import { useState, type FormEvent } from "react"
 import { AddSegmentButton } from "@/components/ui/AddSegmentButton"
+import { Button } from "@/components/ui/Button"
 import { Icon } from "@/components/ui/Icon"
 import { PageIntro } from "@/components/ui/PageIntro"
-import { type ApiSegment, type CreateSegmentBody } from "@/lib/api"
+import {
+  campaignApi,
+  type ApiSegment,
+  type CreateSegmentBody,
+  type CustomerPreferences,
+} from "@/lib/api"
 
 export function AudiencePage({
   segments,
   onCreateSegment,
+  onReload,
 }: {
   segments: ApiSegment[]
   onCreateSegment: (body: CreateSegmentBody) => Promise<ApiSegment>
+  onReload: () => Promise<void>
 }) {
   const [search, setSearch] = useState("")
   const [segmentName, setSegmentName] = useState("")
