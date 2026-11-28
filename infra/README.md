@@ -8,7 +8,7 @@ Templates implement ADR-0004 (CloudFormation YAML, stacks named `csep-<concern>`
 | :--- | :--- | :--- | :--- |
 | `artifact.yaml` | `csep-artifact` | S3 bucket holding packaged Lambda bundles (versioned, private) | merged (#31) |
 | `cloudfront.yaml` | `csep-cloudfront` | Private frontend S3 bucket and CloudFront distribution | new |
-| `auth.yaml` | `csep-auth` | Cognito user pool + hosted UI domain + web app client (PKCE, revocation) | merged (#9) |
+| `auth.yaml` | `csep-auth` | Cognito user pool + OAuth domain + web app client (SRP, refresh rotation, revocation) | merged (#9) |
 | `data.yaml` | `csep-data` | Aurora Serverless v2 cluster and instance, RDS Proxy, managed master and app-user secrets | merged (#4) |
 | `api.yaml` | `csep-api` | HTTP API, JWT authorizer, campaign Lambdas, scoped `rds-db:connect` role | merged (#5) |
 | `dispatcher.yaml` | `csep-dispatcher` | EventBridge Scheduler, Dispatcher Lambda, send SQS queue + DLQ | this PR (#26) |

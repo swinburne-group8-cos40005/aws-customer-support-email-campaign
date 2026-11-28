@@ -15,20 +15,38 @@ pnpm build          # production build in dist/
 pnpm typecheck      # tsc --noEmit
 ```
 
-## API configuration
+## Cognito and API configuration
 
-The Overview page reads live data from the Statistics API
-(`docs/api-contract.md` §2.6). Create `frontend/.env.local`:
+The app signs users in directly with the existing Cognito user pool using
+SRP; it does not redirect to the hosted UI. Registration sends an email
+verification code, which is confirmed in the app. Create `frontend/.env.local`
+from `.env.example` and set the values from the `FrontendConfig` output of the
+`csep-api` CloudFormation stack:
 
 ```bash
-VITE_API_BASE_URL=https://<api-id>.execute-api.<region>.amazonaws.com   # csep-api FrontendConfig.apiBaseUrl
-VITE_DEV_ID_TOKEN=<cognito id token>                                    # optional, local development only
+VITE_COGNITO_USER_POOL_ID=<csep-auth UserPoolId>
+VITE_COGNITO_CLIENT_ID=<csep-auth UserPoolClientId>
+VITE_COGNITO_DOMAIN=https://<csep-auth hosted-login domain>
+VITE_API_BASE_URL=https://<api-id>.execute-api.<region>.amazonaws.com
+# VITE_DEV_ID_TOKEN=<cognito id token>  # optional, local API development only
 ```
 
-Requests send `Authorization: Bearer <Cognito ID token>`. The token comes from
-`sessionStorage` (`csep.idToken`) and falls back to `VITE_DEV_ID_TOKEN`. While the
-sign-in screen is still a prototype, a 401 on the dashboard shows a field to paste
-a token for the current tab.
+`FrontendConfig` now includes `cognitoUserPoolId` in addition to the client ID,
+Cognito domain, and API URL. Redeploy `csep-api` after updating
+`infra/api.yaml`, then read the output with:
+
+```bash
+aws cloudformation describe-stacks --stack-name csep-api \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendConfig'].OutputValue | [0]" \
+  --output text
+```
+
+The existing `csep-auth` app client must allow `ALLOW_USER_SRP_AUTH` and
+self-registration; those settings are already present in `infra/auth.yaml`.
+Keep the hosted domain configured because the SPA uses its OAuth token endpoint
+to refresh rotated refresh tokens. Requests to the Campaign API send the Cognito
+ID token as `Authorization: Bearer ...`; sessions are stored in the current
+browser tab and restored on reload.
 
 ## Project structure
 
@@ -80,6 +98,6 @@ Imports use the `@/` alias for `src/` (configured in `vite.config.ts` and `tscon
 - Dark mode is driven by a `theme-dark` class on the app shell; the overrides in
   `index.css` match Tailwind class names such as `bg-[#F7F7F9]` and `text-[#2…`,
   so if you rename those utility classes, update the matching selectors too.
-- Data is in-memory only (no backend); the login form accepts any input.
+- Data is in-memory only (no backend) except for API-backed reporting views.
 - The campaign draft lives in `Workspace`, so progress is kept when you move
   between sidebar pages and return to Campaigns.

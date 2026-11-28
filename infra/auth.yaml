@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  csep-auth stack (ADR-0004). Cognito user pool, hosted-UI domain and the
+  csep-auth stack (ADR-0004). Cognito user pool, OAuth domain and the
   web app client used by both the frontend (#9) and the API Gateway JWT
-  authorizer in csep-api. Public SPA client: PKCE authorization-code
-  flow (no client secret), refresh-token rotation and explicit token
-  revocation enabled per ADR-0004.
+  authorizer in csep-api. The public SPA client uses SRP for direct sign-in;
+  its OAuth token endpoint supports refresh-token rotation and explicit
+  token revocation per ADR-0004.
 
 Parameters:
   EnvironmentName:
@@ -45,9 +45,8 @@ Resources:
           - Name: verified_email
             Priority: 1
 
-  # Hosted UI so the frontend (#9) does not implement login screens
-  # against Cognito directly — hosted domain handles sign-in, PKCE
-  # redirect and logout.
+  # The hosted domain remains the OAuth refresh-token endpoint. Interactive
+  # sign-in and registration are handled directly by the frontend using SRP.
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     Properties:
@@ -59,13 +58,11 @@ Resources:
     Properties:
       UserPoolId: !Ref UserPool
       ClientName: csep-web
-      # Public client (no secret) — SPA + PKCE. The client secret
-      # cannot be safely stored in a browser bundle.
+      # Public client (no secret) — SPA SRP sign-in; the OAuth token
+      # endpoint is used to exchange rotated refresh tokens.
       GenerateSecret: false
-      # SRP sign-in stays for direct SDK use; ALLOW_REFRESH_TOKEN_AUTH is
-      # removed because refresh-token rotation is incompatible with the
-      # REFRESH_TOKEN_AUTH flow — the SPA refreshes via the hosted-UI
-      # oauth2/token refresh_token grant instead.
+      # SRP is used by the frontend SDK for direct sign-in. Refresh-token
+      # rotation uses the OAuth token endpoint, not REFRESH_TOKEN_AUTH.
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
       AllowedOAuthFlowsUserPoolClient: true
