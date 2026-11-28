@@ -9,6 +9,7 @@ import { Stepper } from "@/components/campaign/Stepper"
 import { TemplateStep } from "@/components/campaign/TemplateStep"
 import { REVIEW_STEP } from "@/data/campaignSteps"
 import { type CampaignDraft } from "@/hooks/useCampaignDraft"
+import { type WorkspaceSettings } from "@/types"
 
 function getTemplateBody(bodyText: string | null, bodyHtml: string | null) {
   if (bodyText !== null) return bodyText
@@ -24,11 +25,13 @@ export function CampaignPage({
   darkMode,
   onOpenSettings,
   onToggleTheme,
+  settings,
 }: {
   draft: CampaignDraft
   darkMode: boolean
   onOpenSettings: () => void
   onToggleTheme: () => void
+  settings: WorkspaceSettings
 }) {
   const [step, setStep] = useState(0)
   const [sendMode, setSendMode] = useState<"now" | "later">("now")
@@ -37,6 +40,13 @@ export function CampaignPage({
   const [submitted, setSubmitted] = useState(false)
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
+  const [fromName, setFromName] = useState(settings.senderName)
+  const [replyTo, setReplyTo] = useState(settings.replyTo)
+
+  useEffect(() => {
+    setFromName(settings.senderName)
+    setReplyTo(settings.replyTo)
+  }, [settings.senderName, settings.replyTo])
 
   const selectedTemplate = draft.templates.find(
     (template) => template.templateId === draft.templateId,
@@ -136,6 +146,10 @@ export function CampaignPage({
             setSubject={setSubject}
             body={body}
             setBody={setBody}
+            fromName={fromName}
+            setFromName={setFromName}
+            replyTo={replyTo}
+            setReplyTo={setReplyTo}
           />
         )}
         {step === 2 && (

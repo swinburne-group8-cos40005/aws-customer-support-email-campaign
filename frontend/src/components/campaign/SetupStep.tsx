@@ -7,6 +7,10 @@ export function SetupStep({
   setSubject,
   body,
   setBody,
+  fromName,
+  setFromName,
+  replyTo,
+  setReplyTo,
 }: {
   name: string
   setName: (value: string) => void
@@ -14,6 +18,10 @@ export function SetupStep({
   setSubject: (value: string) => void
   body: string
   setBody: (value: string) => void
+  fromName: string
+  setFromName: (value: string) => void
+  replyTo: string
+  setReplyTo: (value: string) => void
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_310px]">
@@ -61,18 +69,24 @@ export function SetupStep({
               <span className="mb-2 block text-[13px] font-semibold text-[#403D48]">
                 From name
               </span>
-              <input className="field" defaultValue="Trong Hieu" />
+              <input
+                className="field"
+                onChange={(event) => setFromName(event.target.value)}
+                placeholder="Sender name"
+                value={fromName}
+              />
             </label>
             <label className="block">
               <span className="mb-2 block text-[13px] font-semibold text-[#403D48]">
                 From email (title of email)
               </span>
-              <div className="field flex items-center text-[#4F4B58]">
-                hello@postly.com
-                <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-[#247A4D]">
-                  <Icon name="check" size={13} />
-                </span>
-              </div>
+              <input
+                className="field"
+                onChange={(event) => setReplyTo(event.target.value)}
+                placeholder="reply@example.com"
+                type="email"
+                value={replyTo}
+              />
             </label>
           </div>
           <label className="block">
